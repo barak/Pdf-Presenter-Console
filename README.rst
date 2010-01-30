@@ -40,8 +40,8 @@ In order to compile and run the Pdf Presenter Console the following
 requirements need to be met:
 
 - Vala Compiler Version >=0.7.8
-- CMake Version >=2.6
-- Gtk+ 2.x
+- CMake Version >=2.6 (actually 2.6.3, for the unset command)
+- Gtk+ 2.x (actually 2.somethinghigher, for GDK_BLANK_CURSOR)
 - libPoppler with glib bindings
 
 Compile and install
