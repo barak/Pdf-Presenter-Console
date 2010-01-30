@@ -1,0 +1,7 @@
+*~
+/obj-*/
+/debian/*.debhelper
+/debian/*.log
+/debian/*.substvars
+/debian/files
+/debian/pdf-presenter-console/
