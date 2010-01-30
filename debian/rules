@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+
+build clean install binary-arch binary-indep binary:
+	dh $@
+
+override_dh_auto_test:
+	echo skipping dh_auto_test as it seems to go into infinite recursion
+
+.PHONY: build clean install binary-arch binary-indep binary

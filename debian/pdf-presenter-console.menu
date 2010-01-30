@@ -1,0 +1,2 @@
+?package(pdf-presenter-console):needs="X11" section="Applications/Viewers"\
+  title="Pdf-Presenter-Console" command="/usr/bin/pdf_presenter_console"
