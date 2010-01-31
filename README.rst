@@ -121,7 +121,7 @@ your likings::
       -l, --last-minutes=N     Time in minutes, from which on the timer changes its color. (Default 5 minutes)
       -u, --current-size=N     Percentage of the presenter screen to be used for the current slide. (Default 60)
       -s, --switch-screens     Switch the presentation and the presenter screen.
-      -c, --disable-cache      Disable caching and pre-rendering of slides to save memory on cost of speed.
+      -c, --disable-cache      Disable caching and pre-rendering of slides to save memory at the cost of speed.
 
 
 Caching / Prerendering
