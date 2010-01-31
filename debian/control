@@ -11,7 +11,7 @@ Vcs-Browser: http://github.com/jakobwesthoff/Pdf-Presenter-Console
 Package: pdf-presenter-console
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: PPC is a Keynote-like presentation viewer for PDF files
+Description: multi-monitor presentation tool (ala Keynote) for PDF files
  PPC is a viewer for PDF which uses Keynote-like multi-monitor output
  to provide meta information to the speaker.  It can show a normal
  presentation window on one screen and a more sophisticated overview
