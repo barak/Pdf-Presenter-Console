@@ -1,3 +1,10 @@
+pdf-presenter-console (1.1.1-1) unstable; urgency=low
+
+  * New upstream release
+    - fixes build problem with valac 0.7.10
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 22 Feb 2010 14:47:46 +0000
+
 pdf-presenter-console (1.1-1) unstable; urgency=low
 
   * Initial release (Closes: #567685)
