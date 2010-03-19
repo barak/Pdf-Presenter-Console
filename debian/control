@@ -5,8 +5,10 @@ Maintainer: Barak A. Pearlmutter <bap@debian.org>
 Build-Depends: debhelper (>= 7.2.5), valac (>= 0.7.8), cmake (>= 2.6.3), libgtk2.0-dev (>= 2.18.3), libpoppler-glib-dev
 Standards-Version: 3.8.4
 Homepage: http://westhoffswelt.de/projects/pdf_presenter_console.html
-Vcs-Git: git://github.com/jakobwesthoff/Pdf-Presenter-Console.git
-Vcs-Browser: http://github.com/jakobwesthoff/Pdf-Presenter-Console
+Vcs-Git: git://git.debian.org/git/collab-maint/pdf-presenter-console.git
+Vcs-Browser: http://git.debian.org/?p=collab-maint/pdf-presenter-console.git
+# X-Upstream-Vcs-Git: git://github.com/jakobwesthoff/Pdf-Presenter-Console.git
+# X-Upstream-Vcs-Browser: http://github.com/jakobwesthoff/Pdf-Presenter-Console
 
 Package: pdf-presenter-console
 Architecture: any
