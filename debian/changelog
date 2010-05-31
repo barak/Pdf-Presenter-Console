@@ -1,3 +1,9 @@
+pdf-presenter-console (1.1.1-4) unstable; urgency=low
+
+  * Register support of pdf file display with mime subsystem (debian/*.mime)
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 31 May 2010 22:41:10 +0100
+
 pdf-presenter-console (1.1.1-3) unstable; urgency=low
 
   * Swizzle Vcs-* from upstream to debian collab-maint (debian/control)
