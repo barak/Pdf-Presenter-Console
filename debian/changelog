@@ -1,6 +1,8 @@
 pdf-presenter-console (1.1.1-4) unstable; urgency=low
 
   * Register support of pdf file display with mime subsystem (debian/*.mime)
+  * mouse interaction patch, also in next upstream release (closes: #572354)
+  * add TIMER section to man page in debian/pdf_presenter_console.1
 
  -- Barak A. Pearlmutter <bap@debian.org>  Mon, 31 May 2010 22:41:10 +0100
 
