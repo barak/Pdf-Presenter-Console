@@ -1,3 +1,10 @@
+pdf-presenter-console (1.1.1+git.dcf24a-1) unstable; urgency=low
+
+  * Merge upstream snaphot (closes: #589734)
+  * Bump standards version
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 20 Jul 2010 15:37:46 +0100
+
 pdf-presenter-console (1.1.1-4) unstable; urgency=low
 
   * Register support of pdf file display with mime subsystem (debian/*.mime)
