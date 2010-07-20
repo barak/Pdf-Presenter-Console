@@ -71,34 +71,6 @@ namespace org.westhoffswelt.pdfpresenter {
         }
 
         /**
-         * Handle button presses to each of the controllables
-         */
-        public void button_press( Gdk.EventButton btn ) {
-            switch( btn.button ) {
-                case 1:  /* Left button */
-                    this.controllables_next_page();
-                break;
-                case 3: /* Right button */
-                    this.controllables_previous_page();
-                break;
-            }
-        }
-
-        /**
-         * Handle button presses to each of the controllables
-         */
-        public void scroll( Gdk.EventScroll scr ) {
-            switch( scr.direction ) {
-                case Gdk.ScrollDirection.DOWN:
-                    this.controllables_next_page();
-                break;
-                case Gdk.ScrollDirection.UP:
-                    this.controllables_previous_page();
-                break;
-            }
-        }
-
-        /**
          * Register a new Controllable instance on this controller. 
          *
          * On success true is returned, in case the controllable has already been

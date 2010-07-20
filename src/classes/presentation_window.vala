@@ -71,41 +71,17 @@ namespace org.westhoffswelt.pdfpresenter {
             );
 
             this.key_press_event += this.on_key_pressed;
-            this.button_press_event += this.on_button_pressed;
-            this.scroll_event += this.on_scroll;
 
             this.reset();
         }
 
         /**
-         * Handle keypress events on the window and, if necessary send them to the
+         * Handle keypress events on the window and, if neccessary send them to the
          * presentation controller
          */
         protected bool on_key_pressed( PresentationWindow source, EventKey key ) {
             if ( this.presentation_controller != null ) {
                 this.presentation_controller.key_press( key );
-            }
-            return false;
-        }
-
-        /**
-         * Handle button press events on the window and, if necessary send them to the
-         * presentation controller
-         */
-        protected bool on_button_pressed( PresentationWindow source, EventButton btn ) {
-            if ( this.presentation_controller != null ) {
-                this.presentation_controller.button_press( btn );
-            }
-            return false;
-        }
-
-        /**
-         * Handle scroll events on the window and, if necessary send them to the
-         * presentation controller
-         */
-        protected bool on_scroll( PresentationWindow source, EventScroll scr ) {
-            if ( this.presentation_controller != null ) {
-                this.presentation_controller.scroll( scr );
             }
             return false;
         }
