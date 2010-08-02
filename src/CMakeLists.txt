@@ -33,25 +33,58 @@ set(LIB_PATHS
 link_directories(${LIB_PATHS})
 
 set(VALA_SRC
-	pdf_presenter_console.vala
-	classes/pdf_image.vala
-	classes/fullscreen_window.vala
-	classes/presentation_window.vala
-	classes/presentation_controller.vala
-	classes/presenter_window.vala
 	classes/cache_status.vala
+	classes/metadata/base.vala
+	classes/metadata/pdf.vala
+	classes/mutex_locks.vala
+	classes/options.vala
+	classes/presentation_controller.vala
+	classes/renderer/base.vala
+	classes/renderer/pdf.vala
+	classes/renderer/cache/base.vala
+	classes/renderer/cache/simple/engine.vala
+	classes/renderer/cache/png/item.vala
+	classes/renderer/cache/png/engine.vala
+	classes/renderer/cache/option_factory.vala
+	classes/scaler.vala
 	classes/timer_label.vala
+	classes/view/base.vala
+	classes/view/default.vala
+	classes/view/pdf.vala
+	classes/view/behaviour/base.vala
+	classes/view/behaviour/pdf_link/implementation.vala
+	classes/view/behaviour/pdf_link/signal_provider.vala
+	classes/window/fullscreen.vala
+	classes/window/presentation.vala
+	classes/window/presenter.vala
+	interfaces/renderer/caching.vala
+	interfaces/view/prerendering.vala
+	interfaces/view/behaviour/decoratable.vala
 	interfaces/controllable.vala
+	pdf_presenter_console.vala
 )
 
 # Vala segfaults if its output dirs are not existant. Therefore make sure they
 # are there.
-if (NOT IS_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/classes")
-	make_directory("${CMAKE_CURRENT_BINARY_DIR}/classes")
-endif (NOT IS_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/classes")
-if (NOT IS_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/interfaces")
-	make_directory("${CMAKE_CURRENT_BINARY_DIR}/interfaces")
-endif (NOT IS_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/interfaces")
+macro(make_compile_directory directory)
+	if (NOT IS_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${directory}")
+		make_directory("${CMAKE_CURRENT_BINARY_DIR}/${directory}")
+	endif (NOT IS_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${directory}")
+endmacro(make_compile_directory)
+
+make_compile_directory("classes")
+make_compile_directory("classes/metadata")
+make_compile_directory("classes/renderer")
+make_compile_directory("classes/renderer/cache/simple")
+make_compile_directory("classes/renderer/cache/png")
+make_compile_directory("classes/view")
+make_compile_directory("classes/view/behaviour")
+make_compile_directory("classes/view/behaviour/pdf_link")
+make_compile_directory("classes/window")
+make_compile_directory("interfaces")
+make_compile_directory("interfaces/renderer")
+make_compile_directory("interfaces/view")
+make_compile_directory("interfaces/view/behaviour")
 
 vala_precompile(VALA_C
 	${VALA_SRC}
@@ -62,6 +95,8 @@ PACKAGES
 	posix
 OPTIONS 
 	--thread
+	--debug
+	--vapidir=${CMAKE_CURRENT_SOURCE_DIR}/vapis
 GENERATE_HEADER
 	presenter
 GENERATE_VAPI
@@ -71,6 +106,9 @@ GENERATE_VAPI
 add_executable(pdf_presenter_console
   	${VALA_C}
 )
+
+# explicitly add libraries (needed e.g. for Fedora 13+)
+target_link_libraries(pdf_presenter_console -lm)
 
 install(TARGETS 
 	pdf_presenter_console

@@ -32,60 +32,38 @@ namespace org.westhoffswelt.pdfpresenter {
          *
          * This window is supposed to be shown on the beamer
          */
-        private PresentationWindow presentation_window;
+        private Window.Presentation presentation_window;
 
         /**
          * Presenter window showing the current and the next slide as well as
          * different other meta information useful for the person giving the
          * presentation.
          */
-        private PresenterWindow presenter_window;
+        private Window.Presenter presenter_window;
 
         /**
-         * Global mutex used by all threads, to lock the operations on the poppler
-         * library, which is unfortunately not threadsafe, therefore only one
-         * poppler call at a time is possible.
+         * PresentationController instanace managing all actions which need to
+         * be coordinated between the different windows
          */
-        public static GLib.Mutex poppler_mutex = new GLib.Mutex();
+        private PresentationController controller;
 
         /**
-         * Commandline option specifying if the presenter and presentation screen
-         * should be switched.
+         * CacheStatus widget, which coordinates all the information about
+         * cached slides to provide a visual feedback to the user about the
+         * rendering state
          */
-        public static bool display_switch = false;
-        
-        /**
-         * Commandline option which allows the complete disabling of slide caching
-         */
-        public static bool disable_caching = false;
-
-        /**
-         * Commandline option providing the talk duration, which will be used to
-         * display a timer
-         */
-        public static uint duration = 45;
-
-        /**
-         * Commandline option providing the time from which on the timer should
-         * change its color.
-         */
-        public static uint last_minutes = 5;
-
-        /**
-         * Commandline option providing the size of the current slide in
-         * the presenter window
-         */
-        public static uint current_size = 60;
+        private CacheStatus cache_status;
 
         /**
          * Commandline option parser entry definitions
          */
         const OptionEntry[] options = {
-            { "duration", 'd', 0, OptionArg.INT, ref Application.duration, "Duration in minutes of the presentation used for timer display. (Default 45 minutes)", "N" },
-            { "last-minutes", 'l', 0, OptionArg.INT, ref Application.last_minutes, "Time in minutes, from which on the timer changes its color. (Default 5 minutes)", "N" },
-            { "current-size", 'u', 0, OptionArg.INT, ref Application.current_size, "Percentage of the presenter screen to be used for the current slide. (Default 60)", "N" },
-            { "switch-screens", 's', 0, 0, ref Application.display_switch, "Switch the presentation and the presenter screen.", null },
-            { "disable-cache", 'c', 0, 0, ref Application.disable_caching, "Disable caching and pre-rendering of slides to save memory at the cost of speed.", null },
+            { "duration", 'd', 0, OptionArg.INT, ref Options.duration, "Duration in minutes of the presentation used for timer display. (Default 45 minutes)", "N" },
+            { "last-minutes", 'l', 0, OptionArg.INT, ref Options.last_minutes, "Time in minutes, from which on the timer changes its color. (Default 5 minutes)", "N" },
+            { "current-size", 'u', 0, OptionArg.INT, ref Options.current_size, "Percentage of the presenter screen to be used for the current slide. (Default 60)", "N" },
+            { "switch-screens", 's', 0, 0, ref Options.display_switch, "Switch the presentation and the presenter screen.", null },
+            { "disable-cache", 'c', 0, 0, ref Options.disable_caching, "Disable caching and pre-rendering of slides to save memory at the cost of speed.", null },
+            { "enable-compression", 'z', 0, 0, ref Options.enable_cache_compression, "Enable the compression of slide images to trade speed for memory consumption on low memory systems. (Avg. factor 1/30)", null },
             { null }
         };
 
@@ -117,6 +95,30 @@ namespace org.westhoffswelt.pdfpresenter {
         }
 
         /**
+         * Create and return a PresenterWindow using the specified monitor
+         * while displaying the given file
+         */
+        private Window.Presenter create_presenter_window( string filename, int monitor ) {
+            var presenter_window = new Window.Presenter( filename, monitor );
+            controller.register_controllable( presenter_window );
+            presenter_window.set_cache_observer( this.cache_status );
+
+            return presenter_window;
+        }
+
+        /**
+         * Create and return a PresentationWindow using the specified monitor
+         * while displaying the given file
+         */
+        private Window.Presentation create_presentation_window( string filename, int monitor ) {
+            var presentation_window = new Window.Presentation( filename, monitor );
+            controller.register_controllable( presentation_window );
+            presentation_window.set_cache_observer( this.cache_status );
+
+            return presentation_window;
+        }
+
+        /**
          * Main application function, which instantiates the windows and
          * initializes the Gtk system.
          */
@@ -126,12 +128,20 @@ namespace org.westhoffswelt.pdfpresenter {
             Gdk.threads_init();
             Gtk.init( ref args );
 
+            // Initialize the application wide mutex objects
+            MutexLocks.init();
+
             this.parse_command_line_options( args );
 
-            stdout.printf( "Initializing pdf rendering...\n" );
-            
+            stdout.printf( "Initializing rendering...\n" );
+           
+            // Initialize global controller and CacheStatus, to manage
+            // crosscutting concerns between the different windows.
+            this.controller = new PresentationController();
+            this.cache_status = new CacheStatus();
+
             int presenter_monitor, presentation_monitor;
-            if ( Application.display_switch != true ) {
+            if ( Options.display_switch != true ) {
                 presenter_monitor    = 0;
                 presentation_monitor = 1;
             }
@@ -140,34 +150,42 @@ namespace org.westhoffswelt.pdfpresenter {
                 presentation_monitor = 0;
             }
 
-            var controller = new PresentationController();
-            var cache_status = new CacheStatus();
-
             if ( Gdk.Screen.get_default().get_n_monitors() > 1 ) {
-                this.presenter_window = new PresenterWindow( args[1], presenter_monitor );
-                controller.register_controllable( this.presenter_window );
-                this.presenter_window.set_cache_observer( cache_status );
+                this.presentation_window = 
+                    this.create_presentation_window( args[1], presentation_monitor );
+                this.presenter_window = 
+                    this.create_presenter_window( args[1], presenter_monitor );
             }
             else {
                 stdout.printf( "Only one screen detected falling back to simple presentation mode.\n" );
-                presentation_monitor = 0;
+                // Decide which window to display by indirectly examining the
+                // display_switch flag This allows for training sessions with
+                // one monitor displaying the presenter screen
+                if ( presenter_monitor == 1 ) {
+                    this.presentation_window = 
+                        this.create_presentation_window( args[1], 0 );
+                }
+                else {
+                    this.presenter_window = 
+                        this.create_presenter_window( args[1], 0 );
+                }
             }
-
-            this.presentation_window = new PresentationWindow( args[1], presentation_monitor );
-
-            controller.register_controllable( this.presentation_window );
-            this.presentation_window.set_cache_observer( cache_status );
 
             // The windows are always displayed at last to be sure all caches have
             // been created at this point.
-            this.presentation_window.show_all();
+            if ( this.presentation_window != null ) {
+                this.presentation_window.show_all();
+            }
             
             if ( this.presenter_window != null ) {
                 this.presenter_window.show_all();
             }
 
+            
+            // Enter the Glib eventloop
+            // Everything from this point on is completely signal based
             Gdk.threads_enter();
-            Gtk.main ();
+            Gtk.main();
             Gdk.threads_leave();
         }
 
