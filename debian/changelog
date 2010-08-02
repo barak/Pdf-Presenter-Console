@@ -1,4 +1,4 @@
-pdf-presenter-console (1.1.1+git.dcf24a-1) unstable; urgency=low
+pdf-presenter-console (1.1.1+git.02dfcf-1) unstable; urgency=low
 
   * Merge upstream snaphot (closes: #589734)
   * Bump standards version
