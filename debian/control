@@ -7,8 +7,6 @@ Standards-Version: 3.9.0
 Homepage: http://westhoffswelt.de/projects/pdf_presenter_console.html
 Vcs-Git: git://git.debian.org/git/collab-maint/pdf-presenter-console.git
 Vcs-Browser: http://git.debian.org/?p=collab-maint/pdf-presenter-console.git
-# X-Upstream-Vcs-Git: git://github.com/jakobwesthoff/Pdf-Presenter-Console.git
-# X-Upstream-Vcs-Browser: http://github.com/jakobwesthoff/Pdf-Presenter-Console
 
 Package: pdf-presenter-console
 Architecture: any
