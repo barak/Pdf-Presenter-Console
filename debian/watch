@@ -1,2 +1,5 @@
 version=3
+# true upstream:
 http://githubredir.debian.net/github/jakobwesthoff/Pdf-Presenter-Console .*/release-(.*).tar.gz
+# my own "upstream", to treat upstream snapshots as releases
+http://githubredir.debian.net/github/barak/Pdf-Presenter-Console .*/upstream/(.*).tar.gz
