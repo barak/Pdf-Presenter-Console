@@ -39,7 +39,7 @@ Requirements
 In order to compile and run the Pdf Presenter Console the following
 requirements need to be met:
 
-- Vala Compiler Version >=0.7.8
+- Vala Compiler Version >=0.9.7
 - CMake Version >=2.6 (actually 2.6.3, for the unset command)
 - Gtk+ 2.x (actually 2.somethinghigher, for GDK_BLANK_CURSOR)
 - libPoppler with glib bindings
@@ -96,6 +96,32 @@ You may need to prefix this command with a *sudo* or obtain super-user rights
 in any other way applicable to your situation.
 
 Congratulations you just installed Pdf Presenter Console on your system.
+
+
+Retrieving the current trunk from the softwares git repository
+--------------------------------------------------------------
+
+If you want to use the bleeding edge version of this software, you may always
+retrieve the current development branch from its git repository. Do this on
+your own risk. It may not compile, make your socks disappear or even eat your
+cat ;).
+
+The repository is hosted at github__. If the git executable is available on
+your system it can be retrieved using the following command::
+
+    git clone git://github.com/jakobwesthoff/Pdf-Presenter-Console.git
+
+After it has been transfered you need to switch to the
+``Pdf-Presenter-Console`` directory, which has just been created. From inside
+this directory use this command to retrieve all needed submodules::
+
+    git submodules init
+
+You are now set to compile and install the presenter as described in the
+section above. However as mentioned above the code might not compile at all.
+
+
+__ http://github.com/jakobwesthoff/Pdf-Presenter-Console
 
 
 Startup and usage
