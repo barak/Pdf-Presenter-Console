@@ -1,0 +1,47 @@
+Description: Upstream changes introduced in version 1.1.1-3
+ This patch has been created by dpkg-source during the package build.
+ Here's the last changelog entry, hopefully it gives details on why
+ those changes were made:
+ .
+ pdf-presenter-console (1.1.1-3) unstable; urgency=low
+ .
+   * Swizzle Vcs-* from upstream to debian collab-maint (debian/control)
+   * Switch to dpkg-source 3.0 (quilt) format
+ .
+ The person named in the Author field signed this changelog entry.
+Author: Barak A. Pearlmutter <bap@debian.org>
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: <vendor|upstream|other>, <url of original patch>
+Bug: <url in upstream bugtracker>
+Bug-Debian: http://bugs.debian.org/<bugnumber>
+Forwarded: <no|not-needed|url proving that it has been forwarded>
+Reviewed-By: <name and email of someone who approved the patch>
+Last-Update: <YYYY-MM-DD>
+
+--- pdf-presenter-console-1.1.1.orig/README.rst
++++ pdf-presenter-console-1.1.1/README.rst
+@@ -40,8 +40,8 @@ In order to compile and run the Pdf Pres
+ requirements need to be met:
+ 
+ - Vala Compiler Version >=0.7.8
+-- CMake Version >=2.6
+-- Gtk+ 2.x
++- CMake Version >=2.6 (actually 2.6.3, for the unset command)
++- Gtk+ 2.x (actually 2.somethinghigher, for GDK_BLANK_CURSOR)
+ - libPoppler with glib bindings
+ 
+ Compile and install
+@@ -121,7 +121,7 @@ your likings::
+       -l, --last-minutes=N     Time in minutes, from which on the timer changes its color. (Default 5 minutes)
+       -u, --current-size=N     Percentage of the presenter screen to be used for the current slide. (Default 60)
+       -s, --switch-screens     Switch the presentation and the presenter screen.
+-      -c, --disable-cache      Disable caching and pre-rendering of slides to save memory on cost of speed.
++      -c, --disable-cache      Disable caching and pre-rendering of slides to save memory at the cost of speed.
+ 
+ 
+ Caching / Prerendering

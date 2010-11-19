@@ -1,0 +1,15 @@
+Index: pdf-presenter-console-1.1.1/src/classes/pdf_image.vala
+===================================================================
+--- pdf-presenter-console-1.1.1.orig/src/classes/pdf_image.vala	2010-08-05 19:39:23.232801001 +0200
++++ pdf-presenter-console-1.1.1/src/classes/pdf_image.vala	2010-08-05 19:39:52.276801001 +0200
+@@ -247,8 +247,8 @@
+         protected Pixmap render_page( int page_number ) {
+             var background_pixmap = new Pixmap( null, this.scaled_width, this.scaled_height, 24 );
+             var gc = new GC( background_pixmap );
+-            Color white;
+-            Color.parse( "white", out white );
++            Gdk.Color white;
++            Gdk.Color.parse( "white", out white );
+             gc.set_rgb_fg_color( white );
+             background_pixmap.draw_rectangle( gc, true, 0, 0, this.scaled_width, this.scaled_height );
+ 

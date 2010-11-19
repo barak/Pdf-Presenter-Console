@@ -1,7 +1,8 @@
 Source: pdf-presenter-console
 Section: graphics
 Priority: extra
-Maintainer: Barak A. Pearlmutter <bap@debian.org>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Barak A. Pearlmutter <bap@debian.org>
 Build-Depends: debhelper (>= 7.2.5), valac (>= 0.7.8), cmake (>= 2.6.3), libgtk2.0-dev (>= 2.18.3), libpoppler-glib-dev
 Standards-Version: 3.8.4
 Homepage: http://westhoffswelt.de/projects/pdf_presenter_console.html

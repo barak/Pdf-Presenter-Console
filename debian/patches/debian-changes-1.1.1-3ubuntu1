@@ -1,0 +1,123 @@
+Description: Upstream changes introduced in version 1.1.1-3ubuntu1
+ This patch has been created by dpkg-source during the package build.
+ Here's the last changelog entry, hopefully it gives details on why
+ those changes were made:
+ .
+ pdf-presenter-console (1.1.1-3ubuntu1) maverick; urgency=low
+ .
+   * debian/patches/01_fix_undefinied_color_ftbfs.patch:
+     - fix FTBFS with new Vala: use explicitely Gdk.Color
+   * No other changeto build against current poppler library ABI.
+ .
+ The person named in the Author field signed this changelog entry.
+Author: Didier Roche <didrocks@ubuntu.com>
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: <vendor|upstream|other>, <url of original patch>
+Bug: <url in upstream bugtracker>
+Bug-Debian: http://bugs.debian.org/<bugnumber>
+Bug-Ubuntu: https://launchpad.net/bugs/<bugnumber>
+Forwarded: <no|not-needed|url proving that it has been forwarded>
+Reviewed-By: <name and email of someone who approved the patch>
+Last-Update: <YYYY-MM-DD>
+
+--- pdf-presenter-console-1.1.1.orig/src/classes/timer_label.vala
++++ pdf-presenter-console-1.1.1/src/classes/timer_label.vala
+@@ -66,7 +66,7 @@ namespace org.westhoffswelt.pdfpresenter
+          * This property is public and not accesed using a setter to be able to use
+          * Color.parse directly on it.
+          */
+-        public Color normal_color;
++        public Gdk.Color normal_color;
+ 
+         /**
+          * Color used if last_minutes have been reached
+@@ -74,7 +74,7 @@ namespace org.westhoffswelt.pdfpresenter
+          * This property is public and not accesed using a setter to be able to use
+          * Color.parse directly on it.
+          */
+-        public Color last_minutes_color;
++        public Gdk.Color last_minutes_color;
+         
+         /**
+          * Color used to represent negative number (time is over)
+@@ -82,7 +82,7 @@ namespace org.westhoffswelt.pdfpresenter
+          * This property is public and not accesed using a setter to be able to use
+          * Color.parse directly on it.
+          */
+-        public Color negative_color;
++        public Gdk.Color negative_color;
+ 
+         /**
+          * Default constructor taking the initial time as argument
+@@ -92,9 +92,9 @@ namespace org.westhoffswelt.pdfpresenter
+             this._time = initial_time;
+ 
+             // By default the colors are white, yellow and red
+-            Color.parse( "white", out this.normal_color );
+-            Color.parse( "orange", out this.last_minutes_color );
+-            Color.parse( "red", out this.negative_color );
++            Gdk.Color.parse( "white", out this.normal_color );
++            Gdk.Color.parse( "orange", out this.last_minutes_color );
++            Gdk.Color.parse( "red", out this.negative_color );
+         }
+ 
+         /**
+--- pdf-presenter-console-1.1.1.orig/src/classes/cache_status.vala
++++ pdf-presenter-console-1.1.1/src/classes/cache_status.vala
+@@ -80,10 +80,10 @@ namespace org.westhoffswelt.pdfpresenter
+             var background_pixmap = new Pixmap( null, this.width, this.height, 24 );
+             var gc = new GC( background_pixmap );
+             
+-            Color white;
+-            Color.parse( "white", out white );
+-            Color black;
+-            Color.parse( "black", out black );
++            Gdk.Color white;
++            Gdk.Color.parse( "white", out white );
++            Gdk.Color black;
++            Gdk.Color.parse( "black", out black );
+ 
+             gc.set_rgb_fg_color( black );
+             background_pixmap.draw_rectangle( gc, true, 0, 0, this.width, this.height );
+--- pdf-presenter-console-1.1.1.orig/src/classes/presentation_window.vala
++++ pdf-presenter-console-1.1.1/src/classes/presentation_window.vala
+@@ -48,8 +48,8 @@ namespace org.westhoffswelt.pdfpresenter
+                 Gtk.main_quit();
+             };
+ 
+-            Color black;
+-            Color.parse( "black", out black );
++            Gdk.Color black;
++            Gdk.Color.parse( "black", out black );
+             this.modify_bg( StateType.NORMAL, black );
+ 
+             var fixedLayout = new Fixed();
+--- pdf-presenter-console-1.1.1.orig/src/classes/presenter_window.vala
++++ pdf-presenter-console-1.1.1/src/classes/presenter_window.vala
+@@ -69,8 +69,8 @@ namespace org.westhoffswelt.pdfpresenter
+                 Gtk.main_quit();
+             };
+ 
+-            Color black;
+-            Color.parse( "black", out black );
++            Gdk.Color black;
++            Gdk.Color.parse( "black", out black );
+             this.modify_bg( StateType.NORMAL, black );
+ 
+             this.fixedLayout = new Fixed();
+@@ -107,8 +107,8 @@ namespace org.westhoffswelt.pdfpresenter
+             this.fixedLayout.put( this.next_slide, this.current_slide.get_scaled_width(), 0 );
+ 
+             // Color needed for the labels
+-            Color white;
+-            Color.parse( "white", out white );
++            Gdk.Color white;
++            Gdk.Color.parse( "white", out white );
+ 
+             // Initial font needed for the labels
+             // We approximate the point size using pt = px * .75
