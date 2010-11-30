@@ -3,8 +3,10 @@ pdf-presenter-console (1.1.1+git.02dfcf-2) UNRELEASED; urgency=low
   * move upstream repo info (debian/control, debian/copyright)
   * bump standards version (debian/control)
   * bump valac build-depends to 0.9.7+ per README.rst (debian/control)
+  * dh --parallel
+  * dh 8
 
- -- Barak A. Pearlmutter <bap@debian.org>  Tue, 24 Aug 2010 19:02:18 +0200
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 30 Nov 2010 21:49:44 +0000
 
 pdf-presenter-console (1.1.1+git.02dfcf-1) unstable; urgency=low
 
