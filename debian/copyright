@@ -18,8 +18,7 @@ License:
 
     This package is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
-    (at your option) any later version.
+    the Free Software Foundation; either version 3 of the License.
 
     This package is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -32,6 +31,26 @@ License:
 
 On Debian systems, the complete text of the GNU General
 Public License can be found in `/usr/share/common-licenses/GPL-3'.
+
+
+In order to address library license compatibility with GPLv2-only
+libraries, the code is being relicensed under GNU GPLv2+
+
+    Date: Tue, 11 Jan 2011 00:38:42 +0100
+    From: Jakob Westhoff <jakob@westhoffswelt.de>
+    To: barak@cs.nuim.ie
+
+    ...
+
+    I will change the license of PPC to GPLv2+, which should solve the
+    problem, as you pointed out correctly. As I am planing to do a release
+    next weekend or next week I will change the license with this release.
+
+    If you need a release using a proper license before that, just tell me.
+    If you simply need to create the package with another license:
+
+    I hereby give you permission to repackage PPC and release it under the
+    General Public License Version 2 or any later version.
 
 
 The files cmake/vala/*.cmake are BSD licensed:
