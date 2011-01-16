@@ -3,22 +3,26 @@
  *
  * This file is part of pdf-presenter-console.
  *
- * pdf-presenter-console is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 3 of the License.
- *
- * pdf-presenter-console is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * pdf-presenter-console; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ * Copyright (C) 2010-2011 Jakob Westhoff <jakob@westhoffswelt.de>
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 using GLib;
 using Gdk;
+using Cairo;
 
 using org.westhoffswelt.pdfpresenter;
 
@@ -79,7 +83,7 @@ namespace org.westhoffswelt.pdfpresenter.Renderer.Cache {
                 pixmap_width, pixmap_height
             );
 
-            char[] buffer;
+            uint8[] buffer;
 
             try {
                 pixbuf.save_to_buffer( out buffer, "png", "compression", "1", null );           
@@ -88,7 +92,7 @@ namespace org.westhoffswelt.pdfpresenter.Renderer.Cache {
                 error( "Could not generate PNG cache image for slide %u: %s", index, e.message );
             }
 
-            var item = new PNG.Item.with_char_array( buffer );
+            var item = new PNG.Item( buffer );
             
             this.mutex.lock();
             this.storage[index] = item;
@@ -108,7 +112,7 @@ namespace org.westhoffswelt.pdfpresenter.Renderer.Cache {
 
             var loader = new PixbufLoader();
             try {
-                loader.write( item.get_png_data(), item.get_length() );
+                loader.write( item.get_png_data() );
                 loader.close();
             }
             catch( Error e ) {
@@ -123,18 +127,16 @@ namespace org.westhoffswelt.pdfpresenter.Renderer.Cache {
                 pixbuf.get_height(),
                 24
             );
-            var gc = new Gdk.GC( pixmap );
 
-            pixmap.draw_pixbuf( 
-                gc, 
-                pixbuf, 
-                0, 0,
-                0, 0,
-                pixbuf.get_width(), pixbuf.get_height(),
-                Gdk.RgbDither.NONE,
+            Context cr = Gdk.cairo_create( pixmap );
+            Gdk.cairo_set_source_pixbuf( cr, pixbuf, 0, 0 );
+            cr.rectangle(
                 0,
-                0
+                0,
+                pixbuf.get_width(),
+                pixbuf.get_height()
             );
+            cr.fill();
 
             return pixmap;
         }

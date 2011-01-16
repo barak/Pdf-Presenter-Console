@@ -39,7 +39,7 @@ Requirements
 In order to compile and run the Pdf Presenter Console the following
 requirements need to be met:
 
-- Vala Compiler Version >=0.9.7
+- Vala Compiler Version >=0.11.0
 - CMake Version >=2.6 (actually 2.6.3, for the unset command)
 - Gtk+ 2.x (actually 2.somethinghigher, for GDK_BLANK_CURSOR)
 - libPoppler with glib bindings
@@ -113,9 +113,10 @@ your system it can be retrieved using the following command::
 
 After it has been transfered you need to switch to the
 ``Pdf-Presenter-Console`` directory, which has just been created. From inside
-this directory use this command to retrieve all needed submodules::
+this directory use these commands to retrieve all needed submodules::
 
-    git submodules init
+    git submodule init
+    git submodule update
 
 You are now set to compile and install the presenter as described in the
 section above. However as mentioned above the code might not compile at all.
@@ -140,14 +141,15 @@ your likings::
       pdf_presenter_console [OPTION...] <pdf-file>
 
     Help Options:
-      -h, --help               Show help options
+      -h, --help                    Show help options
 
     Application Options:
-      -d, --duration=N         Duration in minutes of the presentation used for timer display. (Default 45 minutes)
-      -l, --last-minutes=N     Time in minutes, from which on the timer changes its color. (Default 5 minutes)
-      -u, --current-size=N     Percentage of the presenter screen to be used for the current slide. (Default 60)
-      -s, --switch-screens     Switch the presentation and the presenter screen.
-      -c, --disable-cache      Disable caching and pre-rendering of slides to save memory at the cost of speed.
+      -d, --duration=N              Duration in minutes of the presentation used for timer display. (Default 45 minutes)
+      -l, --last-minutes=N          Time in minutes, from which on the timer changes its color. (Default 5 minutes)
+      -u, --current-size=N          Percentage of the presenter screen to be used for the current slide. (Default 60)
+      -s, --switch-screens          Switch the presentation and the presenter screen.
+      -c, --disable-cache           Disable caching and pre-rendering of slides to save memory at the cost of speed.
+      -z, --disable-compression     Disable the compression of slide images to trade memory consumption for speed. (Avg. factor 30)
 
 
 Caching / Prerendering
@@ -172,12 +174,13 @@ Since version 2.0 of the Pdf-Presenter-Console the prerendered and cached
 slides can be compressed in memory to save up some memory. Without compression
 a set of about 100 pdf pages can easily grow up to about 1.5gb size. Netbooks
 with only 1gb of memory would swap themselves to death if prerendering is
-enabled in such a situation. Using the *-z* switch the cached slides will be
-compressed before being stored in memory. Even though this reduces the used
-amount of memory by about factor 30 (aka the 1.5gb become about 50mb) it has a
-performance penalty. The compression slows down prerendering by approximately
-factor 2. It does have a speed penalty on page changes as well. But this one is
-negligible.
+enabled in such a situation. The compression is enabled by default as it does
+not harm rendering speed in a noticeable way on most systems. It does however
+slows down prerendering by about a factor of 2. If you have got enough memory
+and want to ensure the fastest possible prerendering you can disable slide
+compression by using the *-z* switch. But be warned using the uncompressed
+prerendering storage will use about 30 times the memory the new compressed
+storage utilizes (aka the 1.5gb become about 50mb)
 
 
 Keybindings

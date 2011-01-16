@@ -3,18 +3,21 @@
  *
  * This file is part of pdf-presenter-console.
  *
- * pdf-presenter-console is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 3 of the License.
- *
- * pdf-presenter-console is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * pdf-presenter-console; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ * Copyright (C) 2010-2011 Jakob Westhoff <jakob@westhoffswelt.de>
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 using Gtk;
@@ -63,7 +66,7 @@ namespace org.westhoffswelt.pdfpresenter {
             { "current-size", 'u', 0, OptionArg.INT, ref Options.current_size, "Percentage of the presenter screen to be used for the current slide. (Default 60)", "N" },
             { "switch-screens", 's', 0, 0, ref Options.display_switch, "Switch the presentation and the presenter screen.", null },
             { "disable-cache", 'c', 0, 0, ref Options.disable_caching, "Disable caching and pre-rendering of slides to save memory at the cost of speed.", null },
-            { "enable-compression", 'z', 0, 0, ref Options.enable_cache_compression, "Enable the compression of slide images to trade speed for memory consumption on low memory systems. (Avg. factor 1/30)", null },
+            { "disable-compression", 'z', 0, 0, ref Options.disable_cache_compression, "Disable the compression of slide images to trade memory consumption for speed. (Avg. factor 30)", null },
             { null }
         };
 
@@ -123,7 +126,7 @@ namespace org.westhoffswelt.pdfpresenter {
          * initializes the Gtk system.
          */
         public void run( string[] args ) {
-            stdout.printf( "Pdf-Presenter-Console Version 2.x DEVELOPMENT Copyright 2009-2010 Jakob Westhoff\n" );
+            stdout.printf( "Pdf-Presenter-Console Version 2.0 Copyright 2009-2011 Jakob Westhoff\n" );
 
             Gdk.threads_init();
             Gtk.init( ref args );

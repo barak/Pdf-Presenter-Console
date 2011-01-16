@@ -3,22 +3,26 @@
  *
  * This file is part of pdf-presenter-console.
  *
- * pdf-presenter-console is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 3 of the License.
- *
- * pdf-presenter-console is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * pdf-presenter-console; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ * Copyright (C) 2010-2011 Jakob Westhoff <jakob@westhoffswelt.de>
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 using Gtk;
 using Gdk;
+using Cairo;
 
 namespace org.westhoffswelt.pdfpresenter {
     /**
@@ -69,28 +73,28 @@ namespace org.westhoffswelt.pdfpresenter {
                 return;
             }
 
-            var background_pixmap = new Pixmap( null, this.width, this.height, 24 );
-            var gc = new GC( background_pixmap );
+            Pixmap background_pixmap = new Pixmap(
+                null,
+                this.width,
+                this.height,
+                24
+            );
+
+            Context cr = Gdk.cairo_create( background_pixmap );
             
-            Color white;
-            Color.parse( "white", out white );
-            Color black;
-            Color.parse( "black", out black );
+            cr.set_source_rgb( 0, 0, 0 );
+            cr.rectangle( 0,0, this.width, this.height );
+            cr.fill();
 
-            gc.set_rgb_fg_color( black );
-            background_pixmap.draw_rectangle( gc, true, 0, 0, this.width, this.height );
-
-            gc.set_rgb_fg_color( white );
-
-            background_pixmap.draw_rectangle( 
-                gc,
-                true,
+            cr.set_source_rgb( 1, 1, 1 );
+            cr.rectangle( 
                 0,
                 0,
                 (int)Math.ceil( this.width * ( (double)this.current_value / this.max_value ) ),
                 this.height
             );
-            
+            cr.fill();
+
             this.set_from_pixmap( background_pixmap, null );
         }
 
