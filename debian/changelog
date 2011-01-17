@@ -1,6 +1,6 @@
 pdf-presenter-console (2.0-1) experimental; urgency=low
 
-  * New upstream release
+  * New upstream release (closes: #610251)
   * bump version of valac build dependency (debian/control)
 
  -- Barak A. Pearlmutter <bap@debian.org>  Sun, 16 Jan 2011 16:51:21 +0000
