@@ -1,4 +1,4 @@
-pdf-presenter-console (2.0-1) unstable; urgency=low
+pdf-presenter-console (2.0-1) experimental; urgency=low
 
   * New upstream release
   * bump version of valac build dependency (debian/control)
