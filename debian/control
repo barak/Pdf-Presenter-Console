@@ -1,6 +1,6 @@
 Source: pdf-presenter-console
 Section: graphics
-Priority: extra
+Priority: optional
 Maintainer: Barak A. Pearlmutter <bap@debian.org>
 Build-Depends: debhelper (>= 8),
 	       valac (>= 0.11.0),
