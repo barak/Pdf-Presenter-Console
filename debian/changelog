@@ -1,6 +1,5 @@
 pdf-presenter-console (2.0-2) unstable; urgency=low
 
-  * New upstream release
   * priority optional (debian/control)
   * allow valac-0.12 as valac build dependency
 
