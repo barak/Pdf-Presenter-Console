@@ -1,3 +1,10 @@
+pdf-presenter-console (2.0-4) unstable; urgency=low
+
+  * reverse valac disjunctive dependencies (closes: #609676)
+  * bump debian standards
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Thu, 02 Jun 2011 14:04:31 +0100
+
 pdf-presenter-console (2.0-3) unstable; urgency=low
 
   * alias for binary (debian/pdf-presenter-console.links) (closes: #597908)
