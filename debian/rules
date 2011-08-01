@@ -1,12 +1,14 @@
 #!/usr/bin/make -f
 
-build clean install binary-arch binary-indep binary:
+dh_targets=binary binary-arch binary-indep build build-arch build-indep clean install
+
+$(dh_targets) %:
 	dh $@ --parallel
 
 override_dh_auto_test:
 	echo skipping dh_auto_test as it seems to go into infinite recursion
 
-.PHONY: build clean install binary-arch binary-indep binary
+.PHONY: $(dh_targets)
 
 # debian/pdf_presenter_console.1:
 # 	help2man --no-info \
