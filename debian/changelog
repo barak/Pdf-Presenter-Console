@@ -1,3 +1,12 @@
+pdf-presenter-console (2.0-5) unstable; urgency=low
+
+  * align stated priority with override (debian/control)
+  * silence lintian regarding debian/rules targets
+  * single debian patch source option (closes: #643239)
+  * link pdf-presenter-console(1) to pdf_presenter_console(1) (closes: #641755)
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Thu, 06 Oct 2011 22:33:38 +0100
+
 pdf-presenter-console (2.0-4) unstable; urgency=low
 
   * reverse valac disjunctive dependencies (closes: #609676)
