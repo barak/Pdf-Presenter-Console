@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=PDF Presenter Console
+Comment=Presentation program for PDF files
+Type=Application
+Exec=pdf-presenter-console %f
+MimeType=application/pdf;
+Categories=Graphics;Viewer;
