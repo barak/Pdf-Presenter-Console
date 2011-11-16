@@ -1,3 +1,10 @@
+pdf-presenter-console (2.0-6) unstable; urgency=low
+
+  * desktop file, thanks to Peter Eisentraut (closes: #648882)
+  * update man page
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Wed, 16 Nov 2011 09:50:10 +0000
+
 pdf-presenter-console (2.0-5) unstable; urgency=low
 
   * align stated priority with override (debian/control)
