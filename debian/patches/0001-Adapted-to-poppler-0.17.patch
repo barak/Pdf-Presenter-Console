@@ -1,0 +1,48 @@
+From: David Vilar <david.vilar@dfki.de>
+Date: Wed, 23 Nov 2011 09:17:19 +0100
+Subject: Adapted to poppler >= 0.17
+
+Removed deprecated call to poppler_page_render_to_pixbuf and substituted
+with poppler_page_render.
+
+First time I work with vala and poppler. As far as I can see (and test)
+it works, but I cannot guarantee it for all the cases ;-)
+---
+ src/classes/renderer/pdf.vala |   17 +++--------------
+ 1 files changed, 3 insertions(+), 14 deletions(-)
+
+diff --git a/src/classes/renderer/pdf.vala b/src/classes/renderer/pdf.vala
+index 27fde95..8b10670 100644
+--- a/src/classes/renderer/pdf.vala
++++ b/src/classes/renderer/pdf.vala
+@@ -107,26 +107,15 @@ namespace org.westhoffswelt.pdfpresenter {
+             Pixmap pixmap = new Pixmap( null, this.width, this.height, 24 );
+             Context cr = Gdk.cairo_create( pixmap );
+ 
+-            cr.set_source_rgb( 0, 0, 0 );
++            cr.set_source_rgb( 255, 255, 255 );
+             cr.rectangle( 0, 0, this.width, this.height );
+             cr.fill();
+ 
+-            /**
+-             * @TODO: Refactor rendering process to use cairo context directly
+-             * for page rendering instead of inbetween pixbuf
+-             */
+-            var pdf = new Gdk.Pixbuf( Gdk.Colorspace.RGB, false, 8, this.width, this.height );
++            cr.scale(this.scaling_factor, this.scaling_factor);
+             MutexLocks.poppler.lock();
+-            page.render_to_pixbuf( 0, 0, this.width, this.height, this.scaling_factor, 0, pdf );
++            page.render(cr);
+             MutexLocks.poppler.unlock();
+ 
+-            // Compose the rendered pdf with the white background.
+-            Gdk.cairo_set_source_pixbuf( cr, pdf, 0, 0 );
+-            cr.rectangle( 0, 0, this.width, this.height );
+-            cr.fill();
+-
+-            pdf = null;
+-
+             // If the cache is enabled store the newly rendered pixmap
+             if ( this.cache != null ) {
+                 this.cache.store( slide_number, pixmap );
+-- 
