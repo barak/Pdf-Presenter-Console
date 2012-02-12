@@ -1,3 +1,10 @@
+pdf-presenter-console (2.0-7) unstable; urgency=low
+
+  * poppler 0.18 patch, thanks to David Vilar (closes: #651852)
+    also thanks to Martin Pitt <martin.pitt@ubuntu.com> for the ping
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Sun, 12 Feb 2012 09:40:39 +0000
+
 pdf-presenter-console (2.0-6) unstable; urgency=low
 
   * desktop file, thanks to Peter Eisentraut (closes: #648882)
