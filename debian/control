@@ -7,7 +7,7 @@ Build-Depends: debhelper (>= 8),
 	       cmake (>= 2.6.3),
 	       libgtk2.0-dev (>= 2.18.3),
 	       libpoppler-glib-dev
-Standards-Version: 3.9.2
+Standards-Version: 3.9.3
 Homepage: http://westhoffswelt.de/projects/pdf_presenter_console.html
 Vcs-Git: git://git.debian.org/git/collab-maint/pdf-presenter-console.git
 Vcs-Browser: http://git.debian.org/?p=collab-maint/pdf-presenter-console.git
