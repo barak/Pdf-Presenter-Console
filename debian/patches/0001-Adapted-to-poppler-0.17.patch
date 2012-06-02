@@ -9,7 +9,7 @@ First time I work with vala and poppler. As far as I can see (and test)
 it works, but I cannot guarantee it for all the cases ;-)
 ---
  src/classes/renderer/pdf.vala |   17 +++--------------
- 1 files changed, 3 insertions(+), 14 deletions(-)
+ 1 file changed, 3 insertions(+), 14 deletions(-)
 
 diff --git a/src/classes/renderer/pdf.vala b/src/classes/renderer/pdf.vala
 index 27fde95..8b10670 100644
@@ -45,4 +45,3 @@ index 27fde95..8b10670 100644
              // If the cache is enabled store the newly rendered pixmap
              if ( this.cache != null ) {
                  this.cache.store( slide_number, pixmap );
--- 
