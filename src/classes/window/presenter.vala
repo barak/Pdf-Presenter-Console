@@ -146,9 +146,19 @@ namespace org.westhoffswelt.pdfpresenter.Window {
                 (int)Math.floor( bottom_height * 0.8 * 0.75 ) * Pango.SCALE
             );
 
+            // Calculate the countdown to display until the presentation has to
+            // start
+            time_t start_time = 0;
+            if ( Options.start_time != null ) 
+            {
+                start_time = this.parseStartTime( 
+                    Options.start_time 
+                );
+            }
+
             // The countdown timer is centered in the 90% bottom part of the screen
             // It takes 3/4 of the available width
-            this.timer = new TimerLabel( (int)Options.duration * 60 );
+            this.timer = new TimerLabel( (int)Options.duration * 60, start_time );
             this.timer.set_justify( Justification.CENTER );
             this.timer.modify_font( font );
             this.timer.set_size_request( 
@@ -337,6 +347,16 @@ namespace org.westhoffswelt.pdfpresenter.Window {
                 this.screen_geometry.height - 6 
             );
             observer.show();
+        }
+
+        /**
+         * Parse the given start time string to a Time object
+         */
+        private time_t parseStartTime( string start_time ) 
+        {
+            var tm = Time.local( time_t() );
+            tm.strptime( start_time, "%H:%M:%S" );
+            return tm.mktime();
         }
     }
 }
