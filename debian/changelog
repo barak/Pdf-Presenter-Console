@@ -1,3 +1,10 @@
+pdf-presenter-console (2.0-9) unstable; urgency=low
+
+  * merge upstream countdown patch
+  * allow valac-0.16 (closes: #675661)
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Sat, 02 Jun 2012 20:37:42 +0100
+
 pdf-presenter-console (2.0-8) unstable; urgency=low
 
   * bump to dh9
