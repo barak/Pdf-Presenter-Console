@@ -36,12 +36,12 @@ namespace org.westhoffswelt.pdfpresenter {
         /**
          * Default constructor restricted to Pdf renderers as input parameter
          */
-        public Pdf( Renderer.Pdf renderer ) {
+        public Pdf( Renderer.Pdf renderer, bool allow_black_on_end, PresentationController presentation_controller ) {
             base( renderer );
 
             // Enable the PDFLink Behaviour by default on PDF Views
             this.associate_behaviour( 
-                new View.Behaviour.PdfLink.Implementation()
+                new View.Behaviour.PdfLink.Implementation( presentation_controller )
             );
         }
 
@@ -54,9 +54,9 @@ namespace org.westhoffswelt.pdfpresenter {
          * aspect ration. The scale rectangle is provided in the scale_rect
          * argument.
          */
-        public static View.Pdf from_pdf_file( string pdf_file, int width, int height, out Rectangle scale_rect = null ) {
-            var file = File.new_for_commandline_arg( pdf_file );
-            var metadata = new Metadata.Pdf( file.get_uri() );
+        public static View.Pdf from_metadata( Metadata.Pdf metadata, int width, int height, bool allow_black_on_end,
+                                              PresentationController presentation_controller,
+                                              out Rectangle scale_rect = null ) {
             var scaler = new Scaler( 
                 metadata.get_page_width(),
                 metadata.get_page_height()
@@ -68,7 +68,7 @@ namespace org.westhoffswelt.pdfpresenter {
                 scale_rect.height
             );
             
-            return new View.Pdf( renderer );
+            return new View.Pdf( renderer, allow_black_on_end, presentation_controller );
         }
 
         /**

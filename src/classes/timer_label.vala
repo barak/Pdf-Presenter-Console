@@ -24,35 +24,30 @@ using Gtk;
 using Gdk;
 
 namespace org.westhoffswelt.pdfpresenter {
+
+    /**
+      * Factory function for creating TimerLabels, depending if a duration was
+      * given.
+      */
+    TimerLabel getTimerLabel( int duration, time_t end_time, uint last_minutes = 0, time_t start_time = 0 ) {
+        if ( end_time > 0 )
+            return new EndTimeTimer( end_time, last_minutes, start_time );
+        else if ( duration > 0 )
+            return new CountdownTimer( duration, last_minutes, start_time );
+        else
+            return new CountupTimer( start_time );
+    }
+
     /**
      * Specialized label, which is capable of easily displaying a timer
      */
-    public class TimerLabel: Gtk.Label {
+    public abstract class TimerLabel: Gtk.Label {
 
         /**
-         * Time which is currently displayed
+         * Time in seconds the presentation has been running. A negative value
+         * indicates pretalk mode, if a starting time has been given.
          */
-        public int time {
-            get {
-                return this._time;
-            }
-            set {
-                this._time = value;
-                this.duration = value;
-                this.format_time();
-            }
-        }
-
-        /**
-         * Internal storage for currently displayed time
-         */
-        protected int _time = 0;
-
-        /*
-         * Duration the timer is reset too if reset is called during
-         * presentation mode.
-         */
-        protected int duration;
+        protected int time = 0;
 
         /**
          * Start time of the talk to calculate and display a countdown
@@ -65,33 +60,152 @@ namespace org.westhoffswelt.pdfpresenter {
         protected uint timeout = 0;
 
         /**
-         * Time marker which indicates the last minutes have begun.
-         */
-        protected uint last_minutes = 5;
-
-        /**
-         * Supportes states aka. modes of the timer
-         *
-         * These states are used to indicate if the talk has already started or
-         * it is been counted down to it's beginning, for example
-         */
-        protected enum MODE {
-            pretalk,
-            talk
-        }
-
-        /**
-         * The mode the timer is currently in
-         */
-        protected MODE current_mode;
-
-        /**
          * Color used for normal timer rendering
          *
          * This property is public and not accesed using a setter to be able to use
          * Color.parse directly on it.
          */
         public Color normal_color;
+
+        /**
+         * Color used for pre-talk timer rendering
+         *
+         * This property is public and not accesed using a setter to be able to use
+         * Color.parse directly on it.
+         */
+        public Color pretalk_color;
+
+        /**
+         * Default constructor taking the initial time as argument, as well as
+         * the time to countdown until the talk actually starts.
+         *
+         * The second argument is optional. If no countdown_time is specified
+         * the countdown will be disabled. The timer is paused in such a case
+         * at the given intial_time.
+         */
+        public TimerLabel( time_t start_time = 0 ) {
+            this.start_time = start_time;
+
+            Color.parse( "white", out this.normal_color );
+            Color.parse( "green", out this.pretalk_color );
+        }
+
+        /**
+         * Start the timer
+         */
+        public virtual void start() {
+            if ( this.timeout != 0 && this.time < 0 ) { 
+                // We are in pretalk, with timeout already running.
+                // Jump to talk mode
+                this.time = 0;
+            } else if ( this.timeout == 0 ) {
+                // Start the timer if it is not running
+                this.timeout = Timeout.add( 1000, this.on_timeout );
+            }
+        }
+
+        /**
+         * Stop the timer
+         */
+        public virtual void stop() {
+            if ( this.timeout != 0 ) {
+                Source.remove( this.timeout );
+                this.timeout = 0;
+            }
+        }
+
+        /**
+         * Pauses the timer if it's running. Returns if the timer is paused.
+         */
+        public bool pause() {
+            bool paused = false;
+            if ( this.time > 0 ) { // In pretalk mode it doesn't make much sense to pause
+                if ( this.timeout != 0 ) {
+                    this.stop();
+                    paused = true;
+                } else {
+                    this.start();
+                }
+            }
+            return paused;
+        }
+
+        /**
+         * Reset the timer to its initial value
+         *
+         * Furthermore the stop state will be restored
+         * If the countdown is running the countdown value is recalculated. The
+         * timer is not stopped in such situation.
+         *
+         * In presentation mode the time will be reset to the initial
+         * presentation time.
+         */
+        public virtual void reset() {
+            this.stop();
+            this.time = this.calculate_countdown();
+            if ( this.time < 0 )
+                this.start();
+            else
+                this.time = 0;
+            this.format_time();
+        }
+
+        /**
+         * Calculate and return the countdown time in (negative) seconds until
+         * the talk begins.
+         */
+        protected int calculate_countdown() 
+        {
+            time_t now = Time.local( time_t() ).mktime();
+            return (int)( now - this.start_time );
+        }
+
+        /**
+         * Update the timer on every timeout step (every second)
+         */
+        protected virtual bool on_timeout() {
+            ++this.time;
+            this.format_time();
+            return true;
+        }
+
+        /**
+         * Shows the corresponding time
+         */
+        protected abstract void format_time();
+
+        /**
+         * Shows a time (in seconds) in hh:mm:ss format, with an additional prefix
+         */
+        protected void show_time(uint timeInSecs, string prefix) {
+            uint hours, minutes, seconds;
+
+            hours = timeInSecs / 60 / 60;
+            minutes = timeInSecs / 60 % 60;
+            seconds = timeInSecs % 60 % 60;
+            
+            this.set_text( 
+                "%s%.2u:%.2u:%.2u".printf(
+                    prefix,
+                    hours,
+                    minutes,
+                    seconds
+                )
+            );
+        }
+    }
+
+    public class CountdownTimer : TimerLabel {
+        /*
+         * Duration the timer is reset to if reset is called during
+         * presentation mode.
+         */
+        protected int duration;
+
+        /**
+         * Time marker which indicates the last minutes have begun.
+         */
+        protected uint last_minutes = 5;
 
         /**
          * Color used if last_minutes have been reached
@@ -109,145 +223,21 @@ namespace org.westhoffswelt.pdfpresenter {
          */
         public Color negative_color;
 
-        /**
-         * Default constructor taking the initial time as argument, as well as
-         * the time to countdown until the talk actually starts.
-         *
-         * The second argument is optional. If no countdown_time is specified
-         * the countdown will be disabled. The timer is paused in such a case
-         * at the given intial_time.
-         */
-        public TimerLabel( int duration, time_t start_time = 0 ) {
+        public CountdownTimer( int duration, uint last_minutes, time_t start_time = 0 ) {
+            base(start_time);
             this.duration = duration;
-            this.start_time = start_time;
+            this.last_minutes = last_minutes;
 
-            // By default the colors are white, yellow and red
-            Color.parse( "white", out this.normal_color );
             Color.parse( "orange", out this.last_minutes_color );
             Color.parse( "red", out this.negative_color );
-        }
-
-        /**
-         * Start the timer
-         */
-        public void start() {
-            // Check if there is a countdown_timer running, in which case it
-            // will be aborted and a jump to talk mode is executed.
-            if ( this.timeout != 0 && this.current_mode == MODE.pretalk ) 
-            {
-                this.current_mode = MODE.talk;
-                this.reset( false );
-                this.start();
-            }
-            // Start the timer if it is not running and the currently set time
-            // is non zero
-            else if ( this._time != 0 && this.timeout == 0 ) {
-                this.timeout = Timeout.add( 1000, this.on_timeout );
-            }
-        }
-
-        /**
-         * Stop the timer
-         */
-        public void stop() {
-            if ( this.timeout != 0 ) {
-                Source.remove( this.timeout );
-                this.timeout = 0;
-            }
-        }
-
-        /**
-         * Reset the timer to its initial value
-         *
-         * Furthermore the stop state will be restored
-         * If the countdown is running the countdown value is recalculated. The
-         * timer is not stopped in such situation.
-         *
-         * In presentation mode the time will be reset to the initial
-         * presentation time.
-         */
-        public void reset( bool do_mode_decission = true ) {
-            this.stop();
-            if ( do_mode_decission == true ) 
-            {
-                this.select_mode();
-            }
-
-            switch( this.current_mode ) 
-            {
-                case MODE.pretalk:
-                    this._time = this.calculate_countdown();
-                    this.start();
-                break;
-                case MODE.talk:
-                    this._time = this.duration;
-                break;
-            }
-           
-            this.format_time();
-        }
-
-        /**
-         * Set the last minute marker
-         */
-        public void set_last_minutes( uint minutes ) {
-            this.last_minutes = minutes;
-        }
-
-        /**
-         * Calculate and return the countdown time in seconds until the talk
-         * begins. If the should have already begun the value is negative
-         * indicating the amount of seconds which have already passed.
-         */
-        protected int calculate_countdown() 
-        {
-            time_t now = Time.local( time_t() ).mktime();
-            return (int)( this.start_time - now );
-        }
-
-        /**
-         * Select the mode based on the current time as well as the given talk
-         * start me
-         */
-        protected void select_mode() 
-        {
-            if ( this.calculate_countdown() <= 0 ) 
-            {
-                this.current_mode = MODE.talk;
-            }
-            else 
-            {
-                this.current_mode = MODE.pretalk;
-            }
-        }
-
-        /**
-         * Update the timer on every timeout step (every second)
-         */
-        protected bool on_timeout() {
-            // Already switch to presentation mode if the timeout counter has
-            // reached one, because after adding the new timer a second will
-            // pass before the new value is filled in.
-            if ( this._time-- <= 1 && this.current_mode == MODE.pretalk ) 
-            {
-                // The zero has been reached on the way down to a presentation
-                // start time. Therefore a mode switch is needed
-                this.current_mode = MODE.talk;
-                this.reset();
-                this.start();
-            }
-
-            this.format_time();
-            return true;
         }
 
         /**
          * Format the given time in a readable hh:mm:ss way and update the
          * label text
          */
-        protected void format_time() {
-            uint time;
-            uint hours, minutes, seconds;
+        protected override void format_time() {
+            uint timeInSecs;
 
             // In pretalk mode we display a negative sign before the the time,
             // to indicate that we are actually counting down to the start of
@@ -255,53 +245,120 @@ namespace org.westhoffswelt.pdfpresenter {
             // Normally the default is a positive number. Therefore a negative
             // sign is not needed and the prefix is just an empty string.
             string prefix = "";
-            if ( this.current_mode == MODE.pretalk ) 
+            if ( this.time < 0 ) // pretalk
             {
                 prefix = "-";
-            }
-
-            if ( this._time >= 0 ) {
-                // Time is positive
-                if ( this.duration != 0 
-                  && this._time < this.last_minutes * 60 ) {
-                    this.modify_fg( 
-                        StateType.NORMAL, 
-                        this.last_minutes_color
-                    );
-                }
-                else {
-                    this.modify_fg( 
-                        StateType.NORMAL, 
-                        this.normal_color
-                    );
-                }
-                
-                time = this._time;
-            }
-            else {
-                // We passed the duration therefore time is negative
+                timeInSecs = -this.time;
                 this.modify_fg( 
                     StateType.NORMAL, 
-                    this.negative_color
+                    this.pretalk_color
                 );
-                time = this._time * (-1);
+            } else {
+                if ( this.time < this.duration ) {
+                    timeInSecs = duration - this.time;
+                    // Still on presentation time
+                    if ( timeInSecs < this.last_minutes * 60 ) {
+                        this.modify_fg( 
+                            StateType.NORMAL, 
+                            this.last_minutes_color
+                        );
+                    }
+                    else {
+                        this.modify_fg( 
+                            StateType.NORMAL, 
+                            this.normal_color
+                        );
+                    }
+                    
+                }
+                else {
+                    // Time is over!
+                    this.modify_fg( 
+                        StateType.NORMAL, 
+                        this.negative_color
+                    );
+                    timeInSecs = this.time - duration;
 
-                // The prefix used for negative time values is a simple minus sign.
-                prefix = "-";
+                    // The prefix used for negative time values is a simple minus sign.
+                    prefix = "-";
+                }
             }
 
-            hours = time / 60 / 60;
-            minutes = time / 60 % 60;
-            seconds = time % 60 % 60;
-            
-            this.set_text( 
-                "%s%.2u:%.2u:%.2u".printf(
-                    prefix,
-                    hours,
-                    minutes,
-                    seconds
-                )
-            );
+            this.show_time(timeInSecs, prefix);
+        }
+    }
+
+    public class EndTimeTimer : CountdownTimer {
+
+        protected time_t end_time;        
+        protected Time end_time_object;
+
+        public EndTimeTimer( time_t end_time, uint last_minutes, time_t start_time = 0 ) {
+            base(1000, last_minutes, start_time);
+            this.end_time = end_time;
+            this.end_time_object = Time.local(end_time);
+        }
+
+        public override void start() {
+            time_t now = Time.local( time_t() ).mktime();
+            this.duration = (int)(this.end_time - now);
+            base.start();
+        }
+
+        public override void stop() {
+            base.stop();
+            this.set_text(this.end_time_object.format("Until %H:%M"));
+        }
+
+        public override void reset() {
+            base.reset();
+            if ( this.timeout == 0 )
+                this.set_text(this.end_time_object.format("Until %H:%M"));
+        }
+
+        public override bool on_timeout() {
+            if (this.time == -1) { // We will switch from pre-talk to in-talk
+                time_t now = Time.local( time_t() ).mktime();
+                this.duration = (int)(this.end_time - now);
+            }
+            return base.on_timeout();
+        }
+    }
+
+    public class CountupTimer : TimerLabel {
+        public CountupTimer( time_t start_time = 0 ) {
+            base(start_time);
+        }
+
+        /**
+         * Format the given time in a readable hh:mm:ss way and update the
+         * label text
+         */
+        protected override void format_time() {
+            uint timeInSecs;
+
+            // In pretalk mode we display a negative sign before the the time,
+            // to indicate that we are actually counting down to the start of
+            // the presentation.
+            // Normally the default is a positive number. Therefore a negative
+            // sign is not needed and the prefix is just an empty string.
+            string prefix = "";
+            if ( this.time < 0 ) // pretalk
+            {
+                prefix = "-";
+                timeInSecs = -this.time;
+                this.modify_fg( 
+                               StateType.NORMAL, 
+                               this.pretalk_color
+                              );
+            } else {
+                timeInSecs = this.time;
+                this.modify_fg( 
+                               StateType.NORMAL, 
+                               this.normal_color
+                              );
+            }
+            this.show_time(timeInSecs, prefix);
         }
     }
 }

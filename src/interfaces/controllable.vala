@@ -30,7 +30,7 @@ namespace org.westhoffswelt.pdfpresenter {
          * Set the presentation controller which needs to be informed of key
          * presses and such.
          */
-        public abstract void set_controller( PresentationController controller ) ;
+        //public abstract void set_controller( PresentationController controller ) ;
 
         /**
          * Return the registered PresentationController
@@ -38,23 +38,38 @@ namespace org.westhoffswelt.pdfpresenter {
         public abstract PresentationController? get_controller();
 
         /**
-         * Change the presentation slide to the next page if applicable
+         * Update the display
          */
-        public abstract void next_page();
+        public abstract void update();
 
         /**
-         * Change the presentation slide to the previous page if applicable.
+         * Edit note for current slide
          */
-        public abstract void previous_page();
+        public abstract void edit_note();
 
         /**
-         * Reset the presentation to it's initial state
+         * Ask for the page to jump to
          */
-        public abstract void reset();
+        public abstract void ask_goto_page();
 
         /**
-         * Display a certain page
+         * Pause the timer
          */
-        public abstract void goto_page( int page_number );
+        public abstract void toggle_pause();
+
+        /**
+         * Reset the timer
+         */
+        public abstract void reset_timer();
+
+        /**
+         * Show an overview of all slides
+         */
+        public abstract void show_overview();
+
+        /**
+         * Hide the overview
+         */
+        public abstract void hide_overview();
     }
 }

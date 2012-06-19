@@ -44,12 +44,15 @@ namespace org.westhoffswelt.pdfpresenter.Window {
         /**
          * Base constructor instantiating a new presentation window
          */
-        public Presentation( string pdf_filename, int screen_num ) {
+        public Presentation( Metadata.Pdf metadata, int screen_num, PresentationController presentation_controller ) {
             base( screen_num );
 
             this.destroy.connect( (source) => {
                 Gtk.main_quit();
             } );
+
+            this.presentation_controller = presentation_controller;
+            this.presentation_controller.register_controllable( this );
 
             Color black;
             Color.parse( "black", out black );
@@ -60,17 +63,19 @@ namespace org.westhoffswelt.pdfpresenter.Window {
             
             Rectangle scale_rect;
             
-            this.view = View.Pdf.from_pdf_file( 
-                pdf_filename,
+            this.view = View.Pdf.from_metadata( 
+                metadata,
                 this.screen_geometry.width, 
                 this.screen_geometry.height,
+                Options.black_on_end,
+                this.presentation_controller,
                 out scale_rect
             );
 
             if ( !Options.disable_caching ) {
                 ((Renderer.Caching)this.view.get_renderer()).set_cache( 
                     Renderer.Cache.OptionFactory.create( 
-                        this.view.get_renderer().get_metadata()
+                        metadata
                     )
                 );
             }
@@ -85,11 +90,13 @@ namespace org.westhoffswelt.pdfpresenter.Window {
 
             this.add_events(EventMask.KEY_PRESS_MASK);
             this.add_events(EventMask.BUTTON_PRESS_MASK);
+            this.add_events(EventMask.SCROLL_MASK);
 
             this.key_press_event.connect( this.on_key_pressed );
             this.button_press_event.connect( this.on_button_press );
+            this.scroll_event.connect( this.on_scroll );
 
-            this.reset();
+            this.update();
         }
 
         /**
@@ -115,6 +122,17 @@ namespace org.westhoffswelt.pdfpresenter.Window {
         }
 
         /**
+         * Handle mouse scrolling events on the window and, if neccessary send
+         * them to the presentation controller
+         */
+        protected bool on_scroll( Gtk.Widget source, EventScroll scroll ) {
+            if ( this.presentation_controller != null ) {
+                this.presentation_controller.scroll( scroll );
+            }
+            return false;
+        }
+
+        /**
          * Set the presentation controller which is notified of keypresses and
          * other observed events
          */
@@ -130,41 +148,57 @@ namespace org.westhoffswelt.pdfpresenter.Window {
         }
 
         /**
-         * Switch the shown pdf to the next page
+         * Update the display
          */
-        public void next_page() {
-            this.view.next();
-        }
-
-        /**
-         * Switch the shown pdf to the previous page
-         */
-        public void previous_page() {
-            this.view.previous();
-        }
-
-        /**
-         * Reset to the initial presentation state
-         */
-        public void reset() {
+        public void update() {
+            if (this.presentation_controller.is_faded_to_black()) {
+                this.view.fade_to_black();
+                return;
+            }
+            if (this.presentation_controller.is_frozen())
+                return;
             try {
-                this.view.display( 0 );
+                this.view.display(this.presentation_controller.get_current_slide_number(), true);
             }
             catch( Renderer.RenderError e ) {
-                GLib.error( "The pdf page 0 could not be rendered: %s", e.message );
+                GLib.error( "The pdf page %d could not be rendered: %s", this.presentation_controller.get_current_slide_number(), e.message );
             }
+        }
+            
+        /**
+         * Edit note for current slide. We don't do anything.
+         */
+        public void edit_note() {
         }
 
         /**
-         * Display a specific page
+         * Ask for the page to jump to. We don't do anything
          */
-        public void goto_page( int page_number ) {
-            try {
-                this.view.display( page_number );
-            }
-            catch( Renderer.RenderError e ) {
-                GLib.error( "The pdf page %d could not be rendered: %s", page_number, e.message );
-            }
+        public void ask_goto_page() {
+        }
+
+        /**
+         * Pause the timer. We don't do anything
+         */
+        public void toggle_pause() {
+        }
+
+        /**
+         * Reset the timer. We don't do anything
+         */
+        public void reset_timer() {
+        }
+
+        /**
+         * Show an overview. We don't do anything (yet?)
+         */
+        public void show_overview() {
+        }
+
+        /**
+         * Hide the overview. We don't do anything
+         */
+        public void hide_overview() {
         }
 
         /**

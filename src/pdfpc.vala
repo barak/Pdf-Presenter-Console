@@ -61,13 +61,18 @@ namespace org.westhoffswelt.pdfpresenter {
          * Commandline option parser entry definitions
          */
         const OptionEntry[] options = {
-            { "duration", 'd', 0, OptionArg.INT, ref Options.duration, "Duration in minutes of the presentation used for timer display. (Default 45 minutes)", "N" },
-            { "start-time", 't', 0, OptionArg.STRING, ref Options.start_time, "Start time of the presentation to be used as a countdown. (Format: hh:mm:ss (24h))", "T" },
+            { "duration", 'd', 0, OptionArg.INT, ref Options.duration, "Duration in minutes of the presentation used for timer display.", "N" },
+            { "end-time", 'e', 0, OptionArg.STRING, ref Options.end_time, "End time of the presentation. (Format: HH:MM (24h))", "T" },
+            { "last-minutes", 'l', 0, OptionArg.INT, ref Options.last_minutes, "Time in minutes, from which on the timer changes its color. (Default 5 minutes)", "N" },
+            { "start-time", 't', 0, OptionArg.STRING, ref Options.start_time, "Start time of the presentation to be used as a countdown. (Format: HH:MM (24h))", "T" },
             { "last-minutes", 'l', 0, OptionArg.INT, ref Options.last_minutes, "Time in minutes, from which on the timer changes its color. (Default 5 minutes)", "N" },
             { "current-size", 'u', 0, OptionArg.INT, ref Options.current_size, "Percentage of the presenter screen to be used for the current slide. (Default 60)", "N" },
+            { "overview-min-size", 'o', 0, OptionArg.INT, ref Options.min_overview_width, "Minimum width for the overview miniatures, in pixels. (Default 150)", "N" },
             { "switch-screens", 's', 0, 0, ref Options.display_switch, "Switch the presentation and the presenter screen.", null },
             { "disable-cache", 'c', 0, 0, ref Options.disable_caching, "Disable caching and pre-rendering of slides to save memory at the cost of speed.", null },
             { "disable-compression", 'z', 0, 0, ref Options.disable_cache_compression, "Disable the compression of slide images to trade memory consumption for speed. (Avg. factor 30)", null },
+            { "black-on-end", 'b', 0, 0, ref Options.black_on_end, "Add an additional black slide at the end of the presentation", null },
+            { "single-screen", 'S', 0, 0, ref Options.single_screen, "Force to use only one screen", null },
             { null }
         };
 
@@ -102,9 +107,9 @@ namespace org.westhoffswelt.pdfpresenter {
          * Create and return a PresenterWindow using the specified monitor
          * while displaying the given file
          */
-        private Window.Presenter create_presenter_window( string filename, int monitor ) {
-            var presenter_window = new Window.Presenter( filename, monitor );
-            controller.register_controllable( presenter_window );
+        private Window.Presenter create_presenter_window( Metadata.Pdf metadata, int monitor ) {
+            var presenter_window = new Window.Presenter( metadata, monitor, this.controller );
+            //controller.register_controllable( presenter_window );
             presenter_window.set_cache_observer( this.cache_status );
 
             return presenter_window;
@@ -114,9 +119,9 @@ namespace org.westhoffswelt.pdfpresenter {
          * Create and return a PresentationWindow using the specified monitor
          * while displaying the given file
          */
-        private Window.Presentation create_presentation_window( string filename, int monitor ) {
-            var presentation_window = new Window.Presentation( filename, monitor );
-            controller.register_controllable( presentation_window );
+        private Window.Presentation create_presentation_window( Metadata.Pdf metadata, int monitor ) {
+            var presentation_window = new Window.Presentation( metadata, monitor, this.controller );
+            //controller.register_controllable( presentation_window );
             presentation_window.set_cache_observer( this.cache_status );
 
             return presentation_window;
@@ -127,7 +132,9 @@ namespace org.westhoffswelt.pdfpresenter {
          * initializes the Gtk system.
          */
         public void run( string[] args ) {
-            stdout.printf( "Pdf-Presenter-Console Version 2.0 Copyright 2009-2011 Jakob Westhoff\n" );
+            stdout.printf( "pdfpc v3.0\n"
+                           + "(C) 2012 David Vilar\n"
+                           + "(C) 2009-2011 Jakob Westhoff\n\n" );
 
             Gdk.threads_init();
             Gtk.init( ref args );
@@ -138,41 +145,38 @@ namespace org.westhoffswelt.pdfpresenter {
             this.parse_command_line_options( args );
 
             stdout.printf( "Initializing rendering...\n" );
-           
+
+            var metadata = new Metadata.Pdf( args[1] );
+            if ( Options.duration != 987654321u )
+                metadata.set_duration(Options.duration);
+
             // Initialize global controller and CacheStatus, to manage
             // crosscutting concerns between the different windows.
-            this.controller = new PresentationController();
+            this.controller = new PresentationController( metadata, Options.black_on_end );
             this.cache_status = new CacheStatus();
 
-            int presenter_monitor, presentation_monitor;
-            if ( Options.display_switch != true ) {
-                presenter_monitor    = 0;
-                presentation_monitor = 1;
-            }
-            else {
-                presenter_monitor    = 1;
-                presentation_monitor = 0;
-            }
 
-            if ( Gdk.Screen.get_default().get_n_monitors() > 1 ) {
+            var screen = Gdk.Screen.get_default();
+            if ( !Options.single_screen && screen.get_n_monitors() > 1 ) {
+                int presenter_monitor, presentation_monitor;
+                if ( Options.display_switch != true )
+                    presenter_monitor    = screen.get_primary_monitor();
+                else
+                    presenter_monitor    = (screen.get_primary_monitor() + 1) % 2;
+                presentation_monitor = (presenter_monitor + 1) % 2;
                 this.presentation_window = 
-                    this.create_presentation_window( args[1], presentation_monitor );
+                    this.create_presentation_window( metadata, presentation_monitor );
                 this.presenter_window = 
-                    this.create_presenter_window( args[1], presenter_monitor );
+                    this.create_presenter_window( metadata, presenter_monitor );
             }
             else {
-                stdout.printf( "Only one screen detected falling back to simple presentation mode.\n" );
-                // Decide which window to display by indirectly examining the
-                // display_switch flag This allows for training sessions with
-                // one monitor displaying the presenter screen
-                if ( presenter_monitor == 1 ) {
-                    this.presentation_window = 
-                        this.create_presentation_window( args[1], 0 );
-                }
-                else {
+                stdout.printf( "Using only one screen\n" );
+                if ( !Options.display_switch)
                     this.presenter_window = 
-                        this.create_presenter_window( args[1], 0 );
-                }
+                        this.create_presenter_window( metadata, -1 );
+                else
+                    this.presentation_window = 
+                        this.create_presentation_window( metadata, -1 );
             }
 
             // The windows are always displayed at last to be sure all caches have

@@ -66,7 +66,15 @@ namespace org.westhoffswelt.pdfpresenter {
          * If the end of slides is reached this method is expected to do
          * nothing.
          */
-        public abstract void next();
+        //public abstract void next();
+
+        /**
+         * Go forward 10 slides
+         *
+         * If the end of slides is reached this method is expected to do
+         * nothing.
+         */
+        //public abstract void jumpN( int n );
 
         /**
          * Goto the previous slide
@@ -74,15 +82,32 @@ namespace org.westhoffswelt.pdfpresenter {
          * If the beginning of slides is reached this method is expected to do
          * nothing.
          */
-        public abstract void previous();
+        //public abstract void previous();
+
+        /**
+         * Go back 10 slides
+         *
+         * If the beginning of slides is reached this method does nothing.
+         */
+        //public abstract void backN( int n );
 
         /**
          * Goto a specific slide number
          *
          * If the slide number does not exist a RenderError.SLIDE_DOES_NOT_EXIST is thrown
          */
-        public abstract void display( int slide_number )
+        public abstract void display( int slide_number, bool force_redraw=false )
             throws Renderer.RenderError;
+
+        /**
+         * Make the screen black. Useful for presentations together with a whiteboard
+         */
+        public abstract void fade_to_black();
+
+        /**
+         * Redraw the current slide. Useful for example when exiting from fade_to_black
+         */
+        public abstract void redraw() throws Renderer.RenderError;
 
         /**
          * Return the currently shown slide number

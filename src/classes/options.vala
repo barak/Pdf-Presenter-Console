@@ -31,6 +31,11 @@ namespace org.westhoffswelt.pdfpresenter {
          * should be switched.
          */
         public static bool display_switch = false;
+
+        /**
+         * Commandline option to force using only one screen.
+         */
+        public static bool single_screen = false;
         
         /**
          * Commandline option which allows the complete disabling of slide caching
@@ -47,8 +52,10 @@ namespace org.westhoffswelt.pdfpresenter {
         /**
          * Commandline option providing the talk duration, which will be used to
          * display a timer
+         *
+         * Same problem as above with default value
          */
-        public static uint duration = 45;
+        public static uint duration = 987654321u;
 
         /**
          * Commandline option providing the time from which on the timer should
@@ -63,9 +70,24 @@ namespace org.westhoffswelt.pdfpresenter {
         public static uint current_size = 60;
 
         /**
+         * Minimum width for the overview miniatures
+         */
+        public static int min_overview_width = 150;
+
+        /**
          * Time the talk starts at, to calculate and display a countdown to
          * this time.
          */
         public static string? start_time = null;
+
+        /**
+         * Time the talk should end
+         */
+        public static string? end_time = null;
+
+        /**
+         * Add a black slide at the end of the presentation
+         */
+        public static bool black_on_end = false;
     }
 }

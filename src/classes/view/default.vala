@@ -30,16 +30,23 @@ namespace org.westhoffswelt.pdfpresenter {
      */
     public class View.Default: View.Base,
         View.Prerendering, View.Behaviour.Decoratable {
-        
+
         /**
          * The currently displayed slide
          */
         protected int current_slide_number;
-
+        
         /**
          * The pixmap containing the currently shown slide
          */
         protected Gdk.Pixmap current_slide;
+
+        /**
+         * The number of slides in the presentation
+         */
+        protected int n_slides;
+
+        protected int slide_limit;
 
         /**
          * List to store all associated behaviours
@@ -49,7 +56,7 @@ namespace org.westhoffswelt.pdfpresenter {
         /**
          * Base constructor taking the renderer to use as an argument
          */
-        public Default( Renderer.Base renderer ) {
+        public Default( Renderer.Base renderer) {
            base( renderer );
 
            // As we are using our own kind of double buffer and blit in a one
@@ -58,6 +65,9 @@ namespace org.westhoffswelt.pdfpresenter {
 
            this.current_slide_number = 0;
 
+           this.n_slides = (int)renderer.get_metadata().get_slide_count();
+           this.slide_limit = this.n_slides + 1;
+        
            // Render the initial page on first realization.
            this.add_events( Gdk.EventMask.STRUCTURE_MASK );
            this.realize.connect( () => {
@@ -151,63 +161,24 @@ namespace org.westhoffswelt.pdfpresenter {
         }
         
         /**
-         * Goto the next slide
-         *
-         * If the end of slides is reached this method does nothing.
-         */
-        public override void next() {
-            if ( this.renderer.get_metadata().get_slide_count() <= this.current_slide_number + 1 ) {
-                // The last slide has been reached, do nothing.
-                return;
-            }
-            
-            try {
-                this.display( this.current_slide_number + 1 );
-            }
-            catch( Renderer.RenderError e ) {
-                // Should actually never happen, but one never knows
-                error( "Could not display next slide: %s", e.message );
-            }
-        }
-
-        /**
-         * Goto the previous slide
-         *
-         * If the beginning of slides is reached this method does nothing.
-         */
-        public override void previous() {
-            if ( this.current_slide_number - 1 < 0 ) {
-                // The first slide has been reached, do nothing.
-                return;
-            }
-            
-            try {
-                this.display( this.current_slide_number - 1 );
-            }
-            catch( Renderer.RenderError e ) {
-                // Should actually never happen, but one never knows
-                error( "Could not display previous slide: %s", e.message );
-            }
-        }
-
-        /**
-         * Goto a specific slide number
+         * Display a specific slide number
          *
          * If the slide number does not exist a
          * RenderError.SLIDE_DOES_NOT_EXIST is thrown
          */
-        public override void display( int slide_number )
+        public override void display( int slide_number, bool force_redraw=false )
             throws Renderer.RenderError {
+
             // If the slide is out of bounds render the outer most slide on
             // each side of the document.
             if ( slide_number < 0 ) {
                 slide_number = 0;
             }
-            if ( slide_number >= this.get_renderer().get_metadata().get_slide_count() ) {
-                slide_number = (int)this.get_renderer().get_metadata().get_slide_count() - 1;
+            if ( slide_number >= this.slide_limit ) {
+                slide_number = this.slide_limit - 1;
             }
 
-            if ( slide_number == this.current_slide_number && this.current_slide != null ) {
+            if ( !force_redraw && slide_number == this.current_slide_number && this.current_slide != null ) {
                 // The slide does not need to be changed, as the correct one is
                 // already shown.
                 return;
@@ -218,13 +189,31 @@ namespace org.westhoffswelt.pdfpresenter {
 
             // Render the requested slide
             // An exception is thrown here, if the slide can not be rendered.
-            this.current_slide = this.renderer.render_to_pixmap( slide_number );
+            if (slide_number < this.n_slides)
+                this.current_slide = this.renderer.render_to_pixmap( slide_number );
+            else
+                this.current_slide = this.renderer.fade_to_black();
             this.current_slide_number = slide_number;
 
             // Have Gtk update the widget
             this.queue_draw_area( 0, 0, this.renderer.get_width(), this.renderer.get_height() );
 
             this.entering_slide( this.current_slide_number );
+        }
+
+        /**
+         * Fill everything with black
+         */
+        public override void fade_to_black() {
+            this.current_slide = this.renderer.fade_to_black();
+            this.queue_draw_area( 0, 0, this.renderer.get_width(), this.renderer.get_height() );
+        }
+
+        /**
+         * Redraw the current slide. Useful for example when exiting from fade_to_black
+         */
+        public override void redraw() throws Renderer.RenderError {
+            this.display(this.current_slide_number, true);
         }
 
         /**

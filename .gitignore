@@ -1,3 +1,8 @@
+.history
+.*.swp
+build/
+src/icon_path.vala
+c-src/icon_path.c
 /obj-*/
 /debian/*.debhelper
 /debian/*.log
