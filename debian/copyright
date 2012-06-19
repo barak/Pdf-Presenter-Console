@@ -6,19 +6,37 @@ It was downloaded from http://github.com/jakobwesthoff/Pdf-Presenter-Console
 X-Upstream-Vcs-Git: git://github.com/jakobwesthoff/Pdf-Presenter-Console.git
 X-Upstream-Vcs-Browser: http://github.com/jakobwesthoff/Pdf-Presenter-Console
 
+Version 3.0 was downloaded from the fork git://github.com/davvil/pdfpc.git
+
 Upstream Author:
 
     Jakob Westhoff <jakob@westhoffswelt.de>
 
+With contributions from
+
+    David Vilar <david.vilar@dfki.de>
+     (most of the post-2.0 work)
+
+    Joachim Breitner <mail@joachim-breitner.de>
+     (button press support)
+
+    Matthias Larisch <mail@matthias-larisch.de>
+     (bluetooth headset button support)
+
+    Rene Wagner <rw@nelianur.org>
+     (cursor hiding; extra key bindings; window size option)
+
 Copyright:
 
-    Copyright (C) 2009 Jakob Westhoff
+    Copyright (C) 2009-2011 Jakob Westhoff
+    Copyright (C) 2012 David Vilar
 
 License:
 
-    This package is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License.
+    This package is free software; you can redistribute it and/or
+    modify it under the terms of the GNU General Public License as
+    published by the Free Software Foundation; either version 2 of the
+    License, or (at your option) any later version.
 
     This package is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -30,32 +48,13 @@ License:
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
 On Debian systems, the complete text of the GNU General
-Public License can be found in `/usr/share/common-licenses/GPL-3'.
+Public License can be found in `/usr/share/common-licenses/GPL-2'.
 
 
-In order to address library license compatibility with GPLv2-only
-libraries, the code is being relicensed under GNU GPLv2+
+The files cmake/Vala_CMake/vala/*.cmake are BSD licensed:
 
-    Date: Tue, 11 Jan 2011 00:38:42 +0100
-    From: Jakob Westhoff <jakob@westhoffswelt.de>
-    To: barak@cs.nuim.ie
-
-    ...
-
-    I will change the license of PPC to GPLv2+, which should solve the
-    problem, as you pointed out correctly. As I am planing to do a release
-    next weekend or next week I will change the license with this release.
-
-    If you need a release using a proper license before that, just tell me.
-    If you simply need to create the package with another license:
-
-    I hereby give you permission to repackage PPC and release it under the
-    General Public License Version 2 or any later version.
-
-
-The files cmake/vala/*.cmake are BSD licensed:
-
-    # Copyright 2009 Jakob Westhoff. All rights reserved.
+    # Copyright 2009-2010 Jakob Westhoff. All rights reserved.
+    # Copyright 2010-2011 Daniel Pfeifer
     # 
     # Redistribution and use in source and binary forms, with or without
     # modification, are permitted provided that the following conditions are met:
@@ -82,5 +81,6 @@ The files cmake/vala/*.cmake are BSD licensed:
     # of the authors and should not be interpreted as representing official policies,
     # either expressed or implied, of Jakob Westhoff
 
-The Debian packaging is (C) 2010, Barak A. Pearlmutter <bap@debian.org> and
-is licensed under the GPL, see above.
+
+The Debian packaging is (C) 2010-2012, Barak A. Pearlmutter <bap@debian.org>
+and is released to the public domain.
