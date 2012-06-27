@@ -1,3 +1,10 @@
+pdf-presenter-console (3.1-1) unstable; urgency=low
+
+  * Move man page tweak to quilt patch
+  * New upstream release
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Wed, 27 Jun 2012 12:13:08 +0100
+
 pdf-presenter-console (3.0-1) unstable; urgency=low
 
   * New upstream release
