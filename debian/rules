@@ -1,11 +1,10 @@
 #!/usr/bin/make -f
 
-dh_targets=binary binary-arch binary-indep build build-arch build-indep clean install
-
-$(dh_targets) %:
+%:
 	dh $@ --parallel
+
+override_dh_auto_configure:
+	dh_auto_configure -- -DSYSCONFDIR=/etc
 
 override_dh_auto_test:
 	echo skipping dh_auto_test as it seems to go into infinite recursion
-
-.PHONY: $(dh_targets)
