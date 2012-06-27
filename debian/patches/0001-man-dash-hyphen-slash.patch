@@ -3,11 +3,11 @@ Date: Wed, 27 Jun 2012 12:20:25 +0100
 Subject: man dash hyphen slash
 
 ---
- man/pdfpc.in |   30 +++++++++++++++---------------
- 1 file changed, 15 insertions(+), 15 deletions(-)
+ man/pdfpc.in |   34 +++++++++++++++++-----------------
+ 1 file changed, 17 insertions(+), 17 deletions(-)
 
 diff --git a/man/pdfpc.in b/man/pdfpc.in
-index 8edc915..01c9e7e 100644
+index 8edc915..1ea3dff 100644
 --- a/man/pdfpc.in
 +++ b/man/pdfpc.in
 @@ -28,7 +28,7 @@ pdfpc file.pdf
@@ -19,7 +19,7 @@ index 8edc915..01c9e7e 100644
  
  .SH OPTIONS
  .TP
-@@ -37,35 +37,35 @@ Duration in minutes of the presentation used for timer display. If not given or
+@@ -37,38 +37,38 @@ Duration in minutes of the presentation used for timer display. If not given or
  if a value of 0 is specified, the clock just measures the time in the
  presentation.
  .TP
@@ -64,7 +64,11 @@ index 8edc915..01c9e7e 100644
 +.BI "\-S, \-\-single\-screen"
  Force to use only one screen
  .TP
- .BI "\-L, \-\-list-actions"
+-.BI "\-L, \-\-list-actions"
++.BI "\-L, \-\-list\-actions"
+ List actions supported in the config file(s)
+ .TP
+ .BI "\-h, \-\-help"
 @@ -151,13 +151,13 @@ below if you want to customize the keybindings.
  To allow fast changes between the different slides of the presentation the pdf
  pages are prerendered to memory.  The progress bar on the bottom of the
@@ -93,3 +97,12 @@ index 8edc915..01c9e7e 100644
  is stored automatically, so you do not need to repeat it for every invocation.
  
  The timer is started if you are navigating away from the first page for the
+@@ -324,7 +324,7 @@ A/M (for Alt/Meta). E.g.
+ bind S+Next    next10
+ .P
+ A list of all possible functions can be obtained
+-via the -L command line option.
++via the \-L command line option.
+ 
+ Under
+ .I http://davvil.github.com/pdfpc#configs 
