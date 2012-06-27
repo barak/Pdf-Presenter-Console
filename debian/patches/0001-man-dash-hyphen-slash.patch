@@ -1,15 +1,15 @@
 From: "Barak A. Pearlmutter" <barak+git@cs.nuim.ie>
-Date: Wed, 27 Jun 2012 12:05:26 +0100
+Date: Wed, 27 Jun 2012 12:20:25 +0100
 Subject: man dash hyphen slash
 
 ---
- man/pdfpc.1 |   30 +++++++++++++++---------------
+ man/pdfpc.in |   30 +++++++++++++++---------------
  1 file changed, 15 insertions(+), 15 deletions(-)
 
-diff --git a/man/pdfpc.1 b/man/pdfpc.1
-index b00a89c..b03b5c8 100644
---- a/man/pdfpc.1
-+++ b/man/pdfpc.1
+diff --git a/man/pdfpc.in b/man/pdfpc.in
+index 8edc915..01c9e7e 100644
+--- a/man/pdfpc.in
++++ b/man/pdfpc.in
 @@ -28,7 +28,7 @@ pdfpc file.pdf
  By default the presenter view appears in the primary monitor and the
  presentation view in the second monitor (provided you have two
@@ -27,13 +27,13 @@ index b00a89c..b03b5c8 100644
 +.BI "\-e, \-\-end\-time"=T
  End time of the presentation. (Format: HH:MM (24h))
  .TP
--.BI "\-t, \-\-start-time"=T
-+.BI "\-t, \-\-start\-time"=T
- Start time of the presentation to be used as a countdown. (Format: HH:MM (24h))
- .TP
 -.BI "\-l, \-\-last-minutes"=N
 +.BI "\-l, \-\-last\-minutes"=N
  Time in minutes, from which on the timer changes its color. (Default 5 minutes)
+ .TP
+-.BI "\-t, \-\-start-time"=T
++.BI "\-t, \-\-start\-time"=T
+ Start time of the presentation to be used as a countdown. (Format: HH:MM (24h))
  .TP
 -.BI "\-u, \-\-current-size"=N
 +.BI "\-u, \-\-current\-size"=N
@@ -64,8 +64,8 @@ index b00a89c..b03b5c8 100644
 +.BI "\-S, \-\-single\-screen"
  Force to use only one screen
  .TP
- .BI "\-h, \-\-help"
-@@ -140,13 +140,13 @@ Define end slide
+ .BI "\-L, \-\-list-actions"
+@@ -151,13 +151,13 @@ below if you want to customize the keybindings.
  To allow fast changes between the different slides of the presentation the pdf
  pages are prerendered to memory.  The progress bar on the bottom of the
  presenter screen indicates how many percent of the slides have been
@@ -81,8 +81,8 @@ index b00a89c..b03b5c8 100644
  .SS Cache compression
  
  The prerendered and cached slides can be compressed in memory to save up some
-@@ -162,9 +162,9 @@ memory the new compressed storage utilizes (aka the 1.5gb become about 50mb)
- 
+@@ -172,9 +172,9 @@ warned using the uncompressed prerendering storage will use about 30 times the
+ memory the new compressed storage utilizes (aka the 1.5gb become about 50mb)
  
  .SS Timer
 -If a duration is given (-d option), the timer will show a countdown with the
