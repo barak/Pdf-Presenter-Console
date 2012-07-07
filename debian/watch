@@ -1,5 +1,15 @@
 version=3
+
 # true upstream:
-http://githubredir.debian.net/github/jakobwesthoff/Pdf-Presenter-Console .*/release-(.*).tar.gz
+#http://githubredir.debian.net/github/jakobwesthoff/Pdf-Presenter-Console .*/release-(.*).tar.gz
+
 # my own "upstream", to treat upstream snapshots as releases
-http://githubredir.debian.net/github/barak/Pdf-Presenter-Console .*/upstream/(.*).tar.gz
+#http://githubredir.debian.net/github/barak/Pdf-Presenter-Console .*/upstream/(.*).tar.gz
+
+# new upstream maintainer, official tarball download page
+#http://davvil.github.com/pdfpc/ \
+# https://github.com/downloads/davvil/pdfpc/pdfpc-(.*).tgz
+
+# new upstream maintainer, repo tags
+http://githubredir.debian.net/github/davvil/pdfpc \
+ /github/davvil/pdfpc/v([0-9.]*)\.tar\.gz
