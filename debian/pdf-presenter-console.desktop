@@ -3,6 +3,7 @@ Name=PDF Presenter Console
 Comment=Presentation program for PDF files
 Type=Application
 Exec=pdf-presenter-console %f
+Icon=pdf-presenter-console
 MimeType=application/pdf;
 Categories=Graphics;Viewer;
 NoDisplay=true
