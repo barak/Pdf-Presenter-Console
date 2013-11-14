@@ -13,3 +13,5 @@ version=3
 # new upstream maintainer, repo tags
 http://githubredir.debian.net/github/davvil/pdfpc \
  /github/davvil/pdfpc/v([0-9.]*)\.tar\.gz
+
+# See competition at http://michaeldadams.org/projects/haskell-pdf-presenter
