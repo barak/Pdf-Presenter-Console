@@ -12,9 +12,8 @@ src:pdf-presenter-console builds a binary which depends on libgee2
 update to it.
 ---
  c-src/CMakeLists.txt | 2 +-
- debian/control       | 2 +-
  src/CMakeLists.txt   | 4 ++--
- 3 files changed, 4 insertions(+), 4 deletions(-)
+ 2 files changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/c-src/CMakeLists.txt b/c-src/CMakeLists.txt
 index 7b380f8..a1ae024 100644
@@ -29,19 +28,6 @@ index 7b380f8..a1ae024 100644
  pkg_check_modules(POPPLER REQUIRED poppler-glib)
  pkg_check_modules(GTK REQUIRED gtk+-2.0)
  pkg_check_modules(GTHREAD REQUIRED gthread-2.0)
-diff --git a/debian/control b/debian/control
-index 6ec62d1..574efc1 100644
---- a/debian/control
-+++ b/debian/control
-@@ -6,7 +6,7 @@ Build-Depends: debhelper (>= 9),
- 	       valac (>= 0.11.0),
- 	       cmake (>= 2.6.3),
- 	       librsvg2-dev,
--	       libgee-dev,
-+	       libgee-0.8-dev,
- 	       libgtk2.0-dev (>= 2.18.3),
- 	       libpoppler-glib-dev
- Standards-Version: 3.9.6
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
 index 3495433..0a8f432 100644
 --- a/src/CMakeLists.txt
