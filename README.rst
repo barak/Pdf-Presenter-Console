@@ -15,7 +15,7 @@ documents, which can be created using nearly any of today's presentation
 software.
 
 More information, including screenshots and a demo presentation, can be found
-at http://davvil.github.com/pdfpc/
+at http://pdfpc.github.com/pdfpc/
 
 Requirements
 ============
@@ -72,7 +72,7 @@ unstable development happens in the *devel* branch.
 When installing from git you will need two additional dependencies:
 
 - git
-- Vala Compiler Version >=0.11.0
+- Vala Compiler Version >=0.16.0
 
 The pdfpc source can be retrieved from github::
 

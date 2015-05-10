@@ -4,23 +4,21 @@
  * This file is part of pdfpc.
  *
  * Copyright (C) 2010-2011 Jakob Westhoff <jakob@westhoffswelt.de>
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
-
-using GLib;
 
 namespace pdfpc.Metadata {
     /**
@@ -29,7 +27,7 @@ namespace pdfpc.Metadata {
     public class Pdf: Base
     {
         protected string? pdf_fname = null;
-        protected string? pdf_url = null;
+        public string? pdf_url = null;
         protected string? pdfpc_url = null;
 
         /**
@@ -40,12 +38,17 @@ namespace pdfpc.Metadata {
         /**
          * Pdf page width
          */
-        protected double page_width;
+        protected double original_page_width;
 
         /**
          * Pdf page height
          */
-        protected double page_height;
+        protected double original_page_height;
+
+        /**
+         * Indicates if pages contains also notes and there position (e. g. when using latex beamer)
+         */
+        protected NotesPosition notes_position;
 
         /**
          * Number of pages in the pdf document
@@ -177,7 +180,7 @@ namespace pdfpc.Metadata {
             var file = File.new_for_commandline_arg(fname);
 
             if (fname.length < 6 || fname[l-6:l] != ".pdfpc") {
-                this.pdf_fname = file.get_basename(); 
+                this.pdf_fname = file.get_basename();
                 this.pdf_url = file.get_uri();
                 string pdf_basefname = file.get_basename();
                 int extension_index = pdf_basefname.last_index_of(".");
@@ -186,7 +189,16 @@ namespace pdfpc.Metadata {
                 this.pdfpc_url = pdfpc_file.get_uri();
             } else {
                 this.pdfpc_url = file.get_uri();
-            } 
+            }
+        }
+
+        /**
+         * Called on quit
+         */
+        public void quit() {
+            this.save_to_disk();
+            foreach (var mapping in this.action_mapping)
+                mapping.deactivate();
         }
 
         /**
@@ -199,14 +211,10 @@ namespace pdfpc.Metadata {
                               + format_end_user_slide()
                               + format_notes();
             try {
-                if ( contents != "" ) {
+                var pdfpc_file = File.new_for_uri(this.pdfpc_url);
+                if (contents != "" || pdfpc_file.query_exists()) {
                     contents = "[file]\n" + this.pdf_fname + "\n" + contents;
-                    var pdfpc_file = File.new_for_uri(this.pdfpc_url);
-                    FileUtils.set_contents(pdfpc_file.get_path(), contents, contents.length-1);
-                } else { // We do not need to write anything. Delete the file if it exists
-                    var file = File.new_for_uri(this.pdfpc_url);
-                    if (file.query_exists())
-                        file.delete();
+                    pdfpc_file.replace_contents(contents.data, null, false, FileCreateFlags.NONE, null);
                 }
             } catch (Error e) {
                 error("%s", e.message);
@@ -244,7 +252,7 @@ namespace pdfpc.Metadata {
          */
         protected string format_notes() {
             string contents = "";
-            if ( this.notes.has_notes() ) 
+            if ( this.notes.has_notes() )
                 contents += ("[notes]\n" + this.notes.format_to_save());
             return contents;
         }
@@ -257,10 +265,31 @@ namespace pdfpc.Metadata {
         }
 
         /**
+         * Fill the slide notes from pdf text annotations.
+         */
+        private void notes_from_document() {
+            for(int i = 0; i < this.page_count; i++) {
+                var page = this.document.get_page(i);
+                List<Poppler.AnnotMapping> anns = page.get_annot_mapping();
+                foreach(unowned Poppler.AnnotMapping am in anns) {
+                    var a = am.annot;
+                    switch(a.get_annot_type()) {
+                        case Poppler.AnnotType.TEXT:
+                            this.notes.set_note(a.get_contents(), real_slide_to_user_slide(i));
+                            break;
+                    }
+                }
+                //page.free_annot_mapping(anns);
+            }
+        }
+
+        /**
          * Base constructor taking the file url to the pdf file
          */
-        public Pdf( string fname ) {
+        public Pdf( string fname, NotesPosition notes_position ) {
             base( fname );
+
+            this.notes_position = notes_position;
 
             fill_path_info(fname);
             notes = new slides_notes();
@@ -269,16 +298,15 @@ namespace pdfpc.Metadata {
             if (File.new_for_uri(this.pdfpc_url).query_exists())
                 parse_pdfpc_file(out skip_line);
             this.document = this.open_pdf_document( this.pdf_url );
-            
+
             // Cache some often used values to minimize thread locking in the
             // future.
-            MutexLocks.poppler.lock();
             this.page_count = this.document.get_n_pages();
-            this.document.get_page( 0 ).get_size( 
-                out this.page_width,
-                out this.page_height
+            this.document.get_page( 0 ).get_size(
+                out this.original_page_width,
+                out this.original_page_height
             );
-    
+
             if (!skips_by_user) {
                 // Auto-detect which pages to skip
                 string previous_label = null;
@@ -294,9 +322,11 @@ namespace pdfpc.Metadata {
             } else {
                 parse_skip_line(skip_line);
             }
-            MutexLocks.poppler.unlock();
+
+            // Prepopulate notes from annotations
+            notes_from_document();
         }
-    
+
         /**
          * Return the number of pages in the pdf document
          */
@@ -398,21 +428,83 @@ namespace pdfpc.Metadata {
         /**
          * Return the width of the first page of the loaded pdf document.
          *
+         * If slides contains also notes, this method returns the width of the content part only
+         *
          * In presentations all pages will have the same size in most cases,
          * therefore this value is assumed to be useful.
          */
         public double get_page_width() {
-            return this.page_width;
+            if (    this.notes_position == NotesPosition.LEFT
+                 || this.notes_position == NotesPosition.RIGHT) {
+                 return this.original_page_width / 2;
+            } else {
+                return this.original_page_width;
+            }
         }
 
         /**
          * Return the height of the first page of the loaded pdf document.
          *
+         * If slides contains also notes, this method returns the height of the content part only
+         *
          * In presentations all pages will have the same size in most cases,
          * therefore this value is assumed to be useful.
          */
         public double get_page_height() {
-            return this.page_height;
+            if (    this.notes_position == NotesPosition.TOP
+                 || this.notes_position == NotesPosition.BOTTOM) {
+                 return this.original_page_height / 2;
+            } else {
+                return this.original_page_height;
+            }
+        }
+
+        /**
+         * Return the horizontal offset of the given area on the page
+         */
+        public double get_horizontal_offset(Area area) {
+            switch (area) {
+                case Area.CONTENT:
+                    switch (this.notes_position) {
+                        case NotesPosition.LEFT:
+                            return this.original_page_width / 2;
+                        default:
+                            return 0;
+                    }
+                case Area.NOTES:
+                    switch (this.notes_position) {
+                        case NotesPosition.RIGHT:
+                            return this.original_page_width / 2;
+                        default:
+                            return 0;
+                    }
+                default:
+                    return 0;
+            }
+        }
+
+        /**
+         * Return the vertical offset of the given area on the page
+         */
+        public double get_vertical_offset(Area area) {
+            switch (area) {
+                case Area.CONTENT:
+                    switch (this.notes_position) {
+                        case NotesPosition.TOP:
+                            return this.original_page_height / 2;
+                        default:
+                            return 0;
+                    }
+                case Area.NOTES:
+                    switch (this.notes_position) {
+                        case NotesPosition.BOTTOM:
+                            return this.original_page_height / 2;
+                        default:
+                            return 0;
+                    }
+                default:
+                    return 0;
+            }
         }
 
         /**
@@ -448,22 +540,113 @@ namespace pdfpc.Metadata {
          */
         protected Poppler.Document open_pdf_document( string url ) {
             var file = File.new_for_uri( url );
-            
+
             Poppler.Document document = null;
 
-            MutexLocks.poppler.lock();
             try {
-                document = new Poppler.Document.from_file( 
+                document = new Poppler.Document.from_file(
                     file.get_uri(),
                     null
                 );
+            } catch( GLib.Error e ) {
+                GLib.printerr( "Unable to open pdf file: %s\n", e.message );
+                Posix.exit(1);
             }
-            catch( GLib.Error e ) {
-                error( "Unable to open pdf file: %s", e.message );
-            }            
-            MutexLocks.poppler.unlock();
 
             return document;
+        }
+
+        /**
+         * Variables used to keep track of the action mappings for the current
+         * page.
+         */
+        private int mapping_page_num = -1;
+        private GLib.List<ActionMapping> action_mapping;
+        private ActionMapping[] blanks = {new ControlledMovie(), new LinkAction()};
+        public weak PresentationController controller = null;
+
+        /**
+         * Return the action mappings (link and annotation mappings) for the
+         * specified page.  If that page is different from the previous one,
+         * destroy the existing action mappings and create new mappings for
+         * the new page.
+         */
+        public unowned GLib.List<ActionMapping> get_action_mapping( int page_num ) {
+            if (page_num != this.mapping_page_num) {
+                foreach (var mapping in this.action_mapping)
+                    mapping.deactivate();
+                this.action_mapping = null; //.Is this really the correct way to clear a list?
+
+                GLib.List<Poppler.LinkMapping> link_mappings;
+                link_mappings = this.get_document().get_page(page_num).get_link_mapping();
+                foreach (unowned Poppler.LinkMapping mapping in link_mappings) {
+                    foreach (var blank in blanks) {
+                        var action = blank.new_from_link_mapping(mapping, this.controller, this.document);
+                        if (action != null) {
+                            this.action_mapping.append(action);
+                            break;
+                        }
+                    }
+                }
+                // Free the mapping memory; already in lock
+                //Poppler.Page.free_link_mapping(link_mappings);
+
+                GLib.List<Poppler.AnnotMapping> annot_mappings;
+                annot_mappings = this.get_document().get_page(page_num).get_annot_mapping();
+                foreach (unowned Poppler.AnnotMapping mapping in annot_mappings) {
+                    foreach (var blank in blanks) {
+                        var action = blank.new_from_annot_mapping(mapping, this.controller, this.document);
+                        if (action != null) {
+                            this.action_mapping.append(action);
+                            break;
+                        }
+                    }
+                }
+                // Free the mapping memory; already in lock
+                //Poppler.Page.free_annot_mapping(annot_mappings);
+
+                this.mapping_page_num = page_num;
+            }
+            return this.action_mapping;
+        }
+    }
+
+    /**
+     * Defines an area on a pdf page
+     */
+    public enum Area {
+        FULL,
+        CONTENT,
+        NOTES;
+    }
+
+    /**
+     * Indicates if a pdf has also notes on the pages (and there position)
+     */
+    public enum NotesPosition {
+        NONE,
+        TOP,
+        BOTTOM,
+        RIGHT,
+        LEFT;
+
+        public static NotesPosition from_string(string? position) {
+            if (position == null) {
+                return NONE;
+            }
+
+            switch (position.down()) {
+                case "left":
+                    return LEFT;
+                case "right":
+                    return RIGHT;
+                case "top":
+                    return TOP;
+                case "bottom":
+                    return BOTTOM;
+                default:
+                    return NONE;
+            }
         }
     }
 }
