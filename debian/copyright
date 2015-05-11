@@ -1,6 +1,10 @@
 This package was debianized by Barak A. Pearlmutter <bap@debian.org> on
 Sat, 30 Jan 2010 16:40:33 +0100.
 
+Now downloading from new epicentre for upstream development,
+ http://pdfpc.github.io/pdfpc/
+ git://github.com/pdfpc/pdfpc.git
+
 It was downloaded from http://github.com/jakobwesthoff/Pdf-Presenter-Console
 
 X-Upstream-Vcs-Git: git://github.com/jakobwesthoff/Pdf-Presenter-Console.git

@@ -10,11 +10,12 @@ Build-Depends: debhelper (>= 9),
 	       libgtk2.0-dev (>= 2.18.3),
 	       libpoppler-glib-dev
 Standards-Version: 3.9.6
-Homepage: http://westhoffswelt.de/projects/pdf_presenter_console.html
+Homepage: http://pdfpc.github.io/pdfpc/
 Vcs-Git: git://anonscm.debian.org/collab-maint/pdf-presenter-console.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/pdf-presenter-console.git
 
 Package: pdf-presenter-console
+Provides: pdfpc
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: multi-monitor presentation tool (ala Keynote) for PDF files
