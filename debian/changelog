@@ -1,3 +1,11 @@
+pdf-presenter-console (3.1.1-5) unstable; urgency=medium
+
+  * oops, update gtk build dependency version to 3.0
+  * add libgstreamer build dependency
+  * remove librsvg build depenedency
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 11 May 2015 14:35:51 +0100
+
 pdf-presenter-console (3.1.1-4) unstable; urgency=medium
 
   * build with libgee-0.8-dev not libgee-dev (closes: #753878)
