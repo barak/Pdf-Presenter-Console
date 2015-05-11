@@ -1,14 +1,7 @@
 version=3
 
-# true upstream:
-#http://githubredir.debian.net/github/jakobwesthoff/Pdf-Presenter-Console .*/release-(.*).tar.gz
-
-# new upstream maintainer, official tarball download page
-http://davvil.github.com/pdfpc/ \
- https://github.com/downloads/davvil/pdfpc/pdfpc-(.*).tgz
-
-# new upstream maintainer, repo tags
+# group upstream maintainers, repo tags
 opts="filenamemangle=s/(?:.*)?v?(\d[\d\.]*)\.tar\.gz/<project>-$1.tar.gz/" \
- https://github.com/davvil/pdfpc/tags (?:.*/)?v?(\d[\d\.]*)\.tar\.gz
+ https://github.com/pdfpc/pdfpc/tags (?:.*/)?v?(\d[\d\.]*)\.tar\.gz
 
 # See competition at http://michaeldadams.org/projects/haskell-pdf-presenter
