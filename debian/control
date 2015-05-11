@@ -7,7 +7,7 @@ Build-Depends: debhelper (>= 9),
 	       cmake (>= 2.6.3),
 	       librsvg2-dev,
 	       libgee-0.8-dev,
-	       libgtk2.0-dev (>= 2.18.3),
+	       libgtk-3-dev,
 	       libpoppler-glib-dev
 Standards-Version: 3.9.6
 Homepage: http://pdfpc.github.io/pdfpc/
