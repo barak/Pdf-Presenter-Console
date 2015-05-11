@@ -1,8 +1,14 @@
 pdf-presenter-console (3.1.1-4) unstable; urgency=medium
 
   * build with libgee-0.8-dev not libgee-dev (closes: #753878)
+  * merge upstream patches to c85ecfbf dated 16-Apr-2015 (closes: #729052)
+    - upstream group maintenance with new epicentre
+    - no .c sources, compiles .vala to .c at build time
+    - adjust for API change in libgee-0.8-dev
+    - many minor and major fixes, like video support
+  * Provide: pdfpc, for ecumenical naming and search (closes: 695269)
 
- -- Barak A. Pearlmutter <bap@debian.org>  Thu, 07 May 2015 15:07:59 +0100
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 11 May 2015 10:27:47 +0100
 
 pdf-presenter-console (3.1.1-3) unstable; urgency=medium
 
