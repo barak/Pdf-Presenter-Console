@@ -1,3 +1,9 @@
+pdf-presenter-console (3.1.1+git.1.5d18a2c-1) unstable; urgency=medium
+
+  * Use upstream snaphot tarball to avoid stray deleted files
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 12 May 2015 10:16:09 +0100
+
 pdf-presenter-console (3.1.1-6) unstable; urgency=medium
 
   * oops add build dependency on libgstreamer-plugins-base0.10-dev
