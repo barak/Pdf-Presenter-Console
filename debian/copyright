@@ -1,65 +1,37 @@
-This package was debianized by Barak A. Pearlmutter <bap@debian.org> on
-Sat, 30 Jan 2010 16:40:33 +0100.
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: pdfpc
+Source:
+    Earlies versions were from
+    http://github.com/jakobwesthoff/Pdf-Presenter-Console
+    git://github.com/jakobwesthoff/Pdf-Presenter-Console.git
+    Version 3.0 was downloaded from the fork
+    git://github.com/davvil/pdfpc.git
+    Current (as of early 2015) epicentre for upstream development is
+    http://pdfpc.github.io/pdfpc/
+    git://github.com/pdfpc/pdfpc.git
 
-Now downloading from new epicentre for upstream development,
- http://pdfpc.github.io/pdfpc/
- git://github.com/pdfpc/pdfpc.git
-
-It was downloaded from http://github.com/jakobwesthoff/Pdf-Presenter-Console
-
-X-Upstream-Vcs-Git: git://github.com/jakobwesthoff/Pdf-Presenter-Console.git
-X-Upstream-Vcs-Browser: http://github.com/jakobwesthoff/Pdf-Presenter-Console
-
-Version 3.0 was downloaded from the fork git://github.com/davvil/pdfpc.git
-
-Upstream Author:
-
-    Jakob Westhoff <jakob@westhoffswelt.de>
-
-With contributions from
-
-    David Vilar <david.vilar@dfki.de>
-     (most of the post-2.0 work)
-
-    Joachim Breitner <mail@joachim-breitner.de>
-     (button press support)
-
-    Matthias Larisch <mail@matthias-larisch.de>
-     (bluetooth headset button support)
-
-    Rene Wagner <rw@nelianur.org>
-     (cursor hiding; extra key bindings; window size option)
-
+Files: *
 Copyright:
+    2009-2011 Jakob Westhoff <jakob@westhoffswelt.de>
+    2010 Joachim Breitner <mail@joachim-breitner.de>
+    2011-2013 David Vilar <davvil@gmail.com>
+    2012-2015 Robert Schroll <rschroll@gmail.com>
+    2012-2015 Andreas Bilke <andreas@bilke.org>
+    2012-2015 Robert Schroll <rschroll@gmail.com>
+License: GPL-2.0+
 
-    Copyright (C) 2009-2011 Jakob Westhoff
-    Copyright (C) 2012 David Vilar
+Files: cmake/Vala_CMake/vala/*.cmake
+Copyright:
+    2009-2010 Jakob Westhoff
+    2010-2011 Daniel Pfeifer
+License: BSD
 
-License:
+Files: debian/*
+Copyright: 2010-2015 Barak A. Pearlmutter <bap@debian.org>
+License: Public-Domain
+ This material is hereby released to the public domain.
 
-    This package is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License as
-    published by the Free Software Foundation; either version 2 of the
-    License, or (at your option) any later version.
-
-    This package is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this package; if not, write to the Free Software
-    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
-
-On Debian systems, the complete text of the GNU General
-Public License can be found in `/usr/share/common-licenses/GPL-2'.
-
-
-The files cmake/Vala_CMake/vala/*.cmake are BSD licensed:
-
-    # Copyright 2009-2010 Jakob Westhoff. All rights reserved.
-    # Copyright 2010-2011 Daniel Pfeifer
-    # 
+License: BSD
     # Redistribution and use in source and binary forms, with or without
     # modification, are permitted provided that the following conditions are met:
     # 
@@ -85,6 +57,20 @@ The files cmake/Vala_CMake/vala/*.cmake are BSD licensed:
     # of the authors and should not be interpreted as representing official policies,
     # either expressed or implied, of Jakob Westhoff
 
-
-The Debian packaging is (C) 2010-2012, Barak A. Pearlmutter <bap@debian.org>
-and is released to the public domain.
+License: GPL-2.0+
+ This package is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this package; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
