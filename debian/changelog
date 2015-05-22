@@ -1,3 +1,10 @@
+pdf-presenter-console (3.1.1+git.2.8a2f105-1) unstable; urgency=medium
+
+  * Upstream snaphot with gstreamer 1.0 support
+  * update build dependencies including GStreamer 0.1 to 1.0 (closes: #785863)
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Fri, 22 May 2015 12:27:47 +0100
+
 pdf-presenter-console (3.1.1+git.1.5d18a2c-1) unstable; urgency=medium
 
   * Use upstream snaphot tarball to avoid stray deleted files
