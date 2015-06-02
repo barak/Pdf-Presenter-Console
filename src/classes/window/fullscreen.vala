@@ -4,6 +4,10 @@
  * This file is part of pdfpc.
  *
  * Copyright (C) 2010-2011 Jakob Westhoff <jakob@westhoffswelt.de>
+ * Copyright 2011, 2012 David Vilar
+ * Copyright 2012, 2015 Robert Schroll
+ * Copyright 2014 Andy Barry
+ * Copyright 2015 Andreas Bilke
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -170,7 +174,8 @@ namespace pdfpc.Window {
 
             // Window might be null in case it has not been mapped
             if (this.get_window() != null) {
-                this.get_window().set_cursor(new Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR));
+                var cursor = new Gdk.Cursor.for_display(Gdk.Display.get_default(), Gdk.CursorType.BLANK_CURSOR);
+                this.get_window().set_cursor(cursor);
 
                 // After the timeout disabled the cursor do not run it again
                 return false;

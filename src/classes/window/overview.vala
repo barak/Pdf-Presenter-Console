@@ -4,6 +4,9 @@
  * This file is part of pdfpc.
  *
  * Copyright (C) 2010-2011 Jakob Westhoff <jakob@westhoffswelt.de>
+ * Copyright 2012 David Vilar
+ * Copyright 2012, 2015 Robert Schroll
+ * Copyright 2015 Andreas Bilke
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -108,7 +111,7 @@ namespace pdfpc.Window {
          * When the section changes, we need to update the current slide number.
          * Also, make sure we don't end up with no selection.
          */
-        public void on_selection_changed(Gtk.Widget source) {
+        public void on_selection_changed() {
             var ltp = this.slides_view.get_selected_items();
             if (ltp != null) {
                 var tp = ltp.data;
@@ -261,7 +264,13 @@ namespace pdfpc.Window {
             if (this.idle_id != 0)
                 Source.remove(idle_id);
             this.next_undone_preview = 0;
-            this.idle_id = GLib.Idle.add(this._fill_previews);
+            this.idle_id = GLib.Idle.add(() => {
+                if (!this._fill_previews()) {
+                    this.idle_id = 0;
+                    return false;
+                }
+                return true;
+            });
         }
 
         protected bool _fill_previews() {

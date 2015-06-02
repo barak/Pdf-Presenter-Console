@@ -4,6 +4,12 @@
  * This file is part of pdfpc.
  *
  * Copyright (C) 2010-2011 Jakob Westhoff <jakob@westhoffswelt.de>
+ * Copyright 2010 Joachim Breitner
+ * Copyright 2011, 2012 David Vilar
+ * Copyright 2012 Matthias Larisch
+ * Copyright 2012, 2015 Robert Schroll
+ * Copyright 2012 Thomas Tschager
+ * Copyright 2015 Andreas Bilke
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +25,12 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
+
+[DBus (name = "org.freedesktop.ScreenSaver")]
+public interface ScreenSaver : Object {
+    public abstract uint32 inhibit(string application_name, string reason) throws IOError;
+    public abstract void un_inhibit(uint32 cookie) throws IOError;
+}
 
 namespace pdfpc {
     /**
@@ -167,6 +179,12 @@ namespace pdfpc {
         public View.Pdf main_view = null;
 
         /**
+         * DBus interface to screensaver
+         */
+        protected ScreenSaver? screensaver = null;
+        protected uint32 screensaver_cookie = 0;
+
+        /**
          * Instantiate a new controller
          */
         public PresentationController(Metadata.Pdf metadata, bool allow_black_on_end) {
@@ -199,6 +217,16 @@ namespace pdfpc {
             this.current_user_slide_number = 0;
 
             this.add_actions();
+
+            try {
+                this.screensaver = Bus.get_proxy_sync(BusType.SESSION, "org.freedesktop.ScreenSaver",
+                    "/org/freedesktop/ScreenSaver");
+                this.screensaver_cookie = this.screensaver.inhibit("pdfpc",
+                    "Showing a presentation");
+                stdout.printf("Screensaver inhibited\n");
+            } catch (Error error) {
+                // pass
+            }
         }
 
         /*
@@ -206,6 +234,14 @@ namespace pdfpc {
          */
         public void quit() {
             this.metadata.quit();
+            if (this.screensaver != null && this.screensaver_cookie != 0) {
+                try {
+                    this.screensaver.un_inhibit(this.screensaver_cookie);
+                    stdout.printf("Screensaver reactivated\n");
+                } catch (Error error) {
+                    // pass
+                }
+            }
             Gtk.main_quit();
         }
 
