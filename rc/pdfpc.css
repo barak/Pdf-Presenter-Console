@@ -2,12 +2,17 @@
     background-color: black;
     background-image: none;
     color: white;
+    font-family: Verdana;
 }
 
 /* .slider and .trough are parts of scrollbar */
 .slider, .progressbar {
     border: none;
     background-color: white;
+}
+
+.bottomText {
+    font-size: 5em;
 }
 
 GtkProgressBar {

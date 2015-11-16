@@ -24,7 +24,7 @@ In order to compile and run pdfpc the following
 requirements need to be met:
 
 - CMake Version >=2.6
-- valac >= 0.26
+- vala >= 0.26
 - GTK+ >= 3.10
 - gee 0.8
 - poppler with glib bindings
@@ -66,6 +66,11 @@ that, for example to be installed under */usr/*, with config files under
 
     cmake -DCMAKE_INSTALL_PREFIX="/usr" -DSYSCONFDIR=/etc ..
 
+By default, pdfpc includes support for movie playback.  This requires several
+gstreamer dependencies as well as gdk-x11.  The requirement for these packages
+can be removed by compiling without support for movie playback by passing
+*-DMOVIES=OFF* to the cmake command.
+
 Compiling from github
 ---------------------
 
@@ -74,7 +79,7 @@ repository. The *master* branch should be fairly stable and safe to use.
 
 The pdfpc source can be retrieved from github::
 
-    git clone --recursive git://github.com/pdfpc/pdfpc.git
+    git clone git://github.com/pdfpc/pdfpc.git
 
 After it has been transfered you need to switch to the ``pdfpc`` directory,
 which has just been created.
@@ -110,6 +115,15 @@ building the application::
     sudo make install
 
 Congratulations you just installed pdfpc on your system.
+
+Compiling Trouble Shooting
+--------------------------
+
+Some distributions do not have a *valac* executable. Instead they ship with a
+version suffix like *valac-0.28*. If cmake can not find your compiler you can
+try running cmake with::
+
+    cmake -DVALA_EXECUTABLE:NAMES=valac-0.28 ..
 
 How to go on
 ============

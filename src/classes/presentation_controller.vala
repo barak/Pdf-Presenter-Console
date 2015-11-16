@@ -109,6 +109,16 @@ namespace pdfpc {
         public signal void hide_overview_request();
 
         /**
+         * Signal: Increase font sizes
+         */
+        public signal void increase_font_size_request();
+
+        /**
+         * Signal: Decrease font sizes
+         */
+        public signal void decrease_font_size_request();
+
+        /**
          * A flag signaling if we allow for a black slide at the end. Tis is
          * useful for the next view and (for some presenters) also for the main
          * view.
@@ -208,7 +218,7 @@ namespace pdfpc {
                 this.metadata.set_duration(0);
             }
             this.timer = getTimerLabel((int) this.metadata.get_duration() * 60,
-                end_time, Options.last_minutes, start_time);
+                end_time, Options.last_minutes, start_time, Options.use_time_of_day);
             this.timer.reset();
 
             this.n_slides = (int) this.metadata.get_slide_count();
@@ -279,6 +289,9 @@ namespace pdfpc {
             add_action("note", this.controllables_edit_note);
             add_action("endSlide", this.set_end_user_slide);
 
+            add_action("increaseFontSize", this.increase_font_size);
+            add_action("decreaseFontSize", this.decrease_font_size);
+
             add_action("exitState", this.exit_state);
             add_action("quit", this.quit);
         }
@@ -317,6 +330,8 @@ namespace pdfpc {
                 "overlay", "Mark current slide as overlay slide",
                 "note", "Edit note for current slide",
                 "endSlide", "Set current slide as end slide",
+                "increaseFontSize", "Increase the current font size by 10%",
+                "decreaseFontSize", "Decrease the current font size by 10%",
                 "exitState", "Exit \"special\" state (pause, freeze, blank)",
                 "quit", "Exit pdfpc"
             };
@@ -441,10 +456,10 @@ namespace pdfpc {
         }
 
         /**
-         * Get the PDF URL
+         * Get the PDF file name
          */
-        public string? get_pdf_url() {
-            return this.metadata.pdf_url;
+        public string? get_pdf_fname() {
+            return this.metadata.pdf_fname;
         }
 
         /**
@@ -862,6 +877,14 @@ namespace pdfpc {
             this.timer.reset();
         }
 
+        protected void increase_font_size() {
+            this.increase_font_size_request();
+        }
+
+        protected void decrease_font_size() {
+            this.decrease_font_size_request();
+        }
+
         protected void exit_state() {
             if (this.faded_to_black) {
                 this.fade_to_black();
@@ -883,6 +906,7 @@ namespace pdfpc {
             return tm.mktime();
         }
 
+#if MOVIES
         /**
          * Give the Gdk.Rectangle corresponding to the Poppler.Rectangle for the nth
          * controllable's main view.  Also, return the XID for the view's window,
@@ -902,5 +926,6 @@ namespace pdfpc {
             rect = view.convert_poppler_rectangle_to_gdk_rectangle(area);
             return (uint*) ((Gdk.X11.Window) view.get_window()).get_xid();
         }
+#endif
     }
 }

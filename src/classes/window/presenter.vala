@@ -9,6 +9,7 @@
  * Copyright 2012, 2015 Andreas Bilke
  * Copyright 2013 Gabor Adam Toth
  * Copyright 2015 Andy Barry
+ * Copyright 2015 Jeremy Maitin-Shepard
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -119,12 +120,18 @@ namespace pdfpc.Window {
         protected Metadata.Pdf metadata;
 
         /**
+         * Width of next/notes area
+         **/
+        protected int next_allocated_width;
+
+        /**
          * Base constructor instantiating a new presenter window
          */
         public Presenter(Metadata.Pdf metadata, int screen_num,
             PresentationController presentation_controller) {
             base(screen_num);
             this.role = "presenter";
+            this.title = "pdfpc - presenter (%s)".printf(metadata.get_document().get_title());
 
             this.destroy.connect((source) => presentation_controller.quit());
 
@@ -134,6 +141,8 @@ namespace pdfpc.Window {
             this.presentation_controller.ask_goto_page_request.connect(this.ask_goto_page);
             this.presentation_controller.show_overview_request.connect(this.show_overview);
             this.presentation_controller.hide_overview_request.connect(this.hide_overview);
+            this.presentation_controller.increase_font_size_request.connect(this.increase_font_size);
+            this.presentation_controller.decrease_font_size_request.connect(this.decrease_font_size);
 
             this.metadata = metadata;
 
@@ -153,7 +162,7 @@ namespace pdfpc.Window {
             this.current_view = new View.Pdf.from_metadata(
                 metadata,
                 current_allocated_width,
-                (int) Math.floor(0.8 * bottom_position),
+                (int) Math.floor(Options.current_height * bottom_position / (double) 100),
                 Metadata.Area.NOTES,
                 Options.black_on_end,
                 true,
@@ -168,11 +177,12 @@ namespace pdfpc.Window {
             //current_allocated_width = cv_requisition.width;
             Gdk.Rectangle next_scale_rect;
             var next_allocated_width = this.screen_geometry.width - current_allocated_width - 4;
+            this.next_allocated_width = next_allocated_width;
             // We leave a bit of margin between the two views
             this.next_view = new View.Pdf.from_metadata(
                 metadata,
                 next_allocated_width,
-                (int) Math.floor(0.7 * bottom_position),
+                (int) Math.floor(Options.next_height * bottom_position / (double)100 ),
                 Metadata.Area.CONTENT,
                 true,
                 false,
@@ -202,41 +212,41 @@ namespace pdfpc.Window {
             );
 
             // TextView for notes in the slides
-            var notes_font = Pango.FontDescription.from_string("Verdana");
-            notes_font.set_size((int) Math.floor(20 * 0.75) * Pango.SCALE);
             this.notes_view = new Gtk.TextView();
+            this.notes_view.name = "notesView";
+            this.notes_view.set_size_request(next_allocated_width, -1);
             this.notes_view.editable = false;
             this.notes_view.cursor_visible = false;
             this.notes_view.wrap_mode = Gtk.WrapMode.WORD;
-            this.notes_view.override_font(notes_font);
             this.notes_view.buffer.text = "";
             this.notes_view.key_press_event.connect(this.on_key_press_notes_view);
+            if (this.metadata.font_size >= 0) {
+                Pango.FontDescription font_desc = get_notes_font_description();
 
-            // Initial font needed for the labels
-            // We approximate the point size using pt = px * .75
-            var font = Pango.FontDescription.from_string("Verdana");
-            font.set_size((int) Math.floor(bottom_height * 0.8 * 0.75) * Pango.SCALE);
+                font_desc.set_size(this.metadata.font_size);
+                this.notes_view.override_font(font_desc);
+            }
 
             // The countdown timer is centered in the 90% bottom part of the screen
-            // It takes 3/4 of the available width
             this.timer = this.presentation_controller.getTimer();
+            this.timer.name = "timer";
+            this.timer.get_style_context().add_class("bottomText");
             this.timer.set_justify(Gtk.Justification.CENTER);
-            this.timer.override_font(font);
 
 
             // The slide counter is centered in the 90% bottom part of the screen
-            // It takes 1/4 of the available width on the right
             this.slide_progress = new Gtk.Entry();
+            this.slide_progress.name = "slideProgress";
+            this.slide_progress.get_style_context().add_class("bottomText");
             this.slide_progress.set_alignment(1f);
-            this.slide_progress.override_font(font);
             this.slide_progress.sensitive = false;
             this.slide_progress.has_frame = false;
             this.slide_progress.key_press_event.connect(this.on_key_press_slide_progress);
 
             this.prerender_progress = new Gtk.ProgressBar();
+            this.prerender_progress.name = "prerenderProgress";
             this.prerender_progress.show_text = true;
             this.prerender_progress.text = "Prerendering...";
-            this.prerender_progress.override_font(notes_font);
             this.prerender_progress.no_show_all = true;
 
             int icon_height = bottom_height - 10;
@@ -325,10 +335,12 @@ namespace pdfpc.Window {
             slide_views.pack_start(current_view_and_stricts, true, true, 0);
 
             var nextViewWithNotes = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
+            nextViewWithNotes.set_size_request(this.next_allocated_width, -1);
             this.next_view.halign = Gtk.Align.CENTER;
             this.next_view.valign = Gtk.Align.CENTER;
             nextViewWithNotes.pack_start(next_view, false, false, 0);
             var notes_sw = new Gtk.ScrolledWindow(null, null);
+            notes_sw.set_size_request(this.next_allocated_width, -1);
             notes_sw.add(this.notes_view);
             notes_sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC);
             nextViewWithNotes.pack_start(notes_sw, true, true, 5);
@@ -354,10 +366,11 @@ namespace pdfpc.Window {
             this.timer.valign = Gtk.Align.CENTER;
 
             var progress_alignment = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
+            progress_alignment.expand = false;
             progress_alignment.pack_end(this.slide_progress);
             this.prerender_progress.vexpand = false;
             this.prerender_progress.valign = Gtk.Align.CENTER;
-            progress_alignment.pack_start(this.prerender_progress, true, true, 0);
+            progress_alignment.pack_end(this.prerender_progress, true, true, 0);
 
             bottom_row.pack_start(status, true, true, 0);
             bottom_row.pack_start(this.timer, true, true, 0);
@@ -539,6 +552,38 @@ namespace pdfpc.Window {
         public void prerender_finished() {
             this.prerender_progress.opacity = 0;  // hide() causes a flash for re-layout.
             this.overview.set_cache(((Renderer.Caching) this.next_view.get_renderer()).cache);
+        }
+
+        /**
+         * Increase font sizes for Widgets
+         */
+        public void increase_font_size() {
+            Pango.FontDescription font_desc = get_notes_font_description();
+
+            int font_size = (int)(font_desc.get_size()*1.1);
+            font_desc.set_size(font_size);
+            this.metadata.font_size = font_size;
+            this.notes_view.override_font(font_desc);
+        }
+
+        /**
+         * Decrease font sizes for Widgets
+         */
+        public void decrease_font_size() {
+            Pango.FontDescription font_desc = get_notes_font_description();
+
+            int font_size = (int)(font_desc.get_size()/1.1);
+            font_desc.set_size(font_size);
+            this.metadata.font_size = font_size;
+            this.notes_view.override_font(font_desc);
+        }
+
+        private Pango.FontDescription get_notes_font_description() {
+            Gtk.StyleContext style_context = this.notes_view.get_style_context();
+            Pango.FontDescription font_desc;
+            style_context.get(style_context.get_state(), "font", out font_desc, null);
+
+            return font_desc;
         }
     }
 }

@@ -4,6 +4,7 @@
  * This file is part of pdfpc.
  *
  * Copyright 2012 Robert Schroll
+ * Copyright 2015 Andreas Bilke
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,10 +53,10 @@ namespace pdfpc {
          */
         public override ActionMapping? new_from_link_mapping(Poppler.LinkMapping mapping,
                 PresentationController controller, Poppler.Document document) {
-            if (mapping.action.type != Poppler.ActionType.GOTO_DEST)
+            if (   (mapping.action.type != Poppler.ActionType.GOTO_DEST || ((Poppler.ActionGotoDest*)mapping.action).dest.type != Poppler.DestType.NAMED)
+                && mapping.action.type != Poppler.ActionType.URI) {
                 return null;
-            if (((Poppler.ActionGotoDest*)mapping.action).dest.type != Poppler.DestType.NAMED)
-                return null;
+            }
 
             var new_obj = new LinkAction();
             new_obj.init(mapping, controller, document);
@@ -69,11 +70,29 @@ namespace pdfpc {
             if (event.button != 1)
                 return false;
 
-            unowned Poppler.ActionGotoDest* action = (Poppler.ActionGotoDest*)this.action;
-            Poppler.Dest destination;
-            destination = this.document.find_dest(action.dest.named_dest);
+            switch (this.action.type) {
+                case Poppler.ActionType.URI:
+                    try {
+                        AppInfo.launch_default_for_uri(this.action.uri.uri, null);
+                    } catch (GLib.Error e) {
+                        stderr.printf(e.message);
 
-            this.controller.page_change_request((int)(destination.page_num - 1));
+                        return false;
+                    }
+
+                    break;
+                case Poppler.ActionType.GOTO_DEST:
+                    unowned Poppler.ActionGotoDest* action = (Poppler.ActionGotoDest*)this.action;
+                    Poppler.Dest destination;
+                    destination = this.document.find_dest(action.dest.named_dest);
+
+                    this.controller.page_change_request((int)(destination.page_num - 1));
+
+                    break;
+                default:
+                    return false;
+            }
+
             return true;
         }
     }

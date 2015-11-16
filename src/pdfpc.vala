@@ -8,6 +8,8 @@
  * Copyright 2012, 2015 Andreas Bilke
  * Copyright 2012, 2015 Robert Schroll
  * Copyright 2014-2015 Andy Barry
+ * Copyright 2015 Maurizio Tomasi
+ * Copyright 2015 Jeremy Maitin-Shepard
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -67,7 +69,10 @@ namespace pdfpc {
             { "end-time", 'e', 0, OptionArg.STRING, ref Options.end_time, "End time of the presentation. (Format: HH:MM (24h))", "T" },
             { "last-minutes", 'l', 0, OptionArg.INT, ref Options.last_minutes, "Time in minutes, from which on the timer changes its color. (Default 5 minutes)", "N" },
             { "start-time", 't', 0, OptionArg.STRING, ref Options.start_time, "Start time of the presentation to be used as a countdown. (Format: HH:MM (24h))", "T" },
+            { "time-of-day", 'C', 0, 0, ref Options.use_time_of_day, "Use the current time of the day for the timer", null},
             { "current-size", 'u', 0, OptionArg.INT, ref Options.current_size, "Percentage of the presenter screen to be used for the current slide. (Default 60)", "N" },
+            { "current-height", 'h', 0, OptionArg.INT, ref Options.current_height, "Percentage of the height of the presenter screen to be used for the current slide. (Default 80)", "N" },
+            { "next-height", 'H', 0, OptionArg.INT, ref Options.next_height, "Percentage of the height of the presenter screen to be used for the next slide. (Default 70)", "N" },
             { "overview-min-size", 'o', 0, OptionArg.INT, ref Options.min_overview_width, "Minimum width for the overview miniatures, in pixels. (Default 150)", "N" },
             { "switch-screens", 's', 0, 0, ref Options.display_switch, "Switch the presentation and the presenter screen.", null },
             { "disable-cache", 'c', 0, 0, ref Options.disable_caching, "Disable caching and pre-rendering of slides to save memory at the cost of speed.", null },
@@ -192,9 +197,9 @@ namespace pdfpc {
                 print_version();
                 Posix.exit(0);
             }
-
+#if MOVIES
             Gst.init( ref args );
-
+#endif
             if (Options.list_actions) {
                 stdout.printf("Config file commands accepted by pdfpc:\n");
                 string[] actions = PresentationController.getActionDescriptions();
@@ -210,7 +215,7 @@ namespace pdfpc {
                 warning("Error: No pdf file given\n");
                 Posix.exit(1);
             } else if (!GLib.FileUtils.test(pdfFilename, (GLib.FileTest.IS_REGULAR))) {
-                warning("Error: pdf file not found\n");
+                warning("Error: pdf file \"%s\" not found\n", pdfFilename);
                 Posix.exit(1);
             }
 
@@ -233,8 +238,10 @@ namespace pdfpc {
                 Options.windowed = true;
             }
 
+            GLib.Environment.set_current_dir(GLib.Path.get_dirname(pdfFilename));
+
             pdfpc.Metadata.NotesPosition notes_position = pdfpc.Metadata.NotesPosition.from_string(Options.notes_position);
-            var metadata = new Metadata.Pdf( pdfFilename, notes_position );
+            var metadata = new Metadata.Pdf(GLib.Path.get_basename(pdfFilename), notes_position);
             if ( Options.duration != 987654321u )
                 metadata.set_duration(Options.duration);
 

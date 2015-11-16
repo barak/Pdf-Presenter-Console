@@ -5,9 +5,10 @@
  *
  * Copyright (C) 2010-2011 Jakob Westhoff <jakob@westhoffswelt.de>
  * Copyright 2011, 2012 David Vilar
- * Copyright 2012 Andreas Bilke
+ * Copyright 2012, 2015 Andreas Bilke
  * Copyright 2012 Robert Schroll
  * Copyright 2014 Andy Barry
+ * Copyright 2015 Jeremy Maitin-Shepard
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -79,6 +80,18 @@ namespace pdfpc {
         public static uint current_size = 60;
 
         /**
+         * Commandline option providing the height of the current slide in
+         * the presenter window
+         **/
+        public static uint current_height = 80;
+
+        /**
+         * Commandline option providing the maximum height of the next slide
+         * in the presenter window
+         **/
+        public static uint next_height = 70;
+
+        /**
          * Minimum width for the overview miniatures
          */
         public static int min_overview_width = 150;
@@ -88,6 +101,11 @@ namespace pdfpc {
          * this time.
          */
         public static string? start_time = null;
+
+        /**
+         * Use the current time of the day as a timer
+         */
+        public static bool use_time_of_day = false;
 
         /**
          * Time the talk should end
@@ -108,7 +126,7 @@ namespace pdfpc {
          * Position of notes on slides
          */
         public static string? notes_position = null;
-        
+
         /**
          * Size of the presenter window
          */
