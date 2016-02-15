@@ -6,7 +6,7 @@
  * Copyright (C) 2010-2011 Jakob Westhoff <jakob@westhoffswelt.de>
  * Copyright 2011, 2012 David Vilar
  * Copyright 2012, 2015 Andreas Bilke
- * Copyright 2012 Robert Schroll
+ * Copyright 2012, 2015 Robert Schroll
  * Copyright 2014 Andy Barry
  * Copyright 2015 Jeremy Maitin-Shepard
  *
@@ -31,6 +31,11 @@ namespace pdfpc {
      * information and their default values.
      */
     public class Options: GLib.Object {
+        static construct {
+            key_bindings = new Gee.ArrayList<BindTuple>();
+            mouse_bindings = new Gee.ArrayList<BindTuple>();
+        }
+
         /**
          * Commandline option specifying if the presenter and presentation screen
          * should be switched.
@@ -58,6 +63,11 @@ namespace pdfpc {
          * bigger for normal presentations.
          */
         public static bool disable_cache_compression = false;
+
+        /**
+         * Commandline option to disable the auto detection of overlay slides
+         */
+        public static bool disable_auto_grouping = false;
 
         /**
          * Commandline option providing the talk duration, which will be used to
@@ -136,5 +146,24 @@ namespace pdfpc {
          * Flag if the version string should be printed on startup
          */
         public static bool version = false;
+
+        public class BindTuple {
+            public string type;
+            public uint keyCode;
+            public uint modMask;
+            public string actionName;
+        }
+
+        /**
+         * Global storage for key un/bindings from the config file.
+         * Used to post pone binding execution in presentation controller
+         */
+        public static Gee.ArrayList<BindTuple> key_bindings;
+
+        /**
+         * Global storage for mouse un/bindings from the config file.
+         * Used to post pone binding execution in presentation controller
+         */
+        public static Gee.ArrayList<BindTuple> mouse_bindings;
     }
 }

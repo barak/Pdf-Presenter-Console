@@ -4,8 +4,9 @@
  * This file is part of pdfpc.
  *
  * Copyright 2012, 2015 Robert Schroll
- * Copyright 2015 Séverin Lemaignan
+ * Copyright 2014-2015 Séverin Lemaignan
  * Copyright 2015 Andreas Bilke
+ * Copyright 2016 Andy Barry
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -563,7 +564,12 @@ namespace pdfpc {
                 this.stoptime * Gst.SECOND < timestamp &&
                 timestamp < (this.stoptime + 0.2) * Gst.SECOND) {
                 if (this.loop) {
-                    this.pipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH, this.starttime * Gst.SECOND);
+                    // attempting to seek from this callback fails, so we
+                    // must schedule a seek on next idle time.
+                    GLib.Idle.add( () => {
+                        this.pipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH, this.starttime * Gst.SECOND);
+                        return false;
+                    } );
                 } else {
                     // Can't seek to beginning w/o updating output, so mark to seek later
                     this.eos = true;

@@ -8,7 +8,7 @@
  * Copyright 2012, 2015 Robert Schroll
  * Copyright 2012, 2015 Andreas Bilke
  * Copyright 2013 Gabor Adam Toth
- * Copyright 2015 Andy Barry
+ * Copyright 2015-2016 Andy Barry
  * Copyright 2015 Jeremy Maitin-Shepard
  *
  * This program is free software; you can redistribute it and/or modify
@@ -172,13 +172,13 @@ namespace pdfpc.Window {
 
             // The next slide is right to the current one and takes up the
             // remaining width
-            //Requisition cv_requisition;
-            //this.current_view.size_request(out cv_requisition);
-            //current_allocated_width = cv_requisition.width;
-            Gdk.Rectangle next_scale_rect;
-            var next_allocated_width = this.screen_geometry.width - current_allocated_width - 4;
+
+            // do not allocate negative width (in case of current_allocated_width == this.screen_geometry.width)
+            // this happens, when the user set -u 100
+            int next_allocated_width = (int)Math.fmax(this.screen_geometry.width - current_allocated_width - 4, 0);
             this.next_allocated_width = next_allocated_width;
             // We leave a bit of margin between the two views
+            Gdk.Rectangle next_scale_rect;
             this.next_view = new View.Pdf.from_metadata(
                 metadata,
                 next_allocated_width,
@@ -246,7 +246,16 @@ namespace pdfpc.Window {
             this.prerender_progress = new Gtk.ProgressBar();
             this.prerender_progress.name = "prerenderProgress";
             this.prerender_progress.show_text = true;
-            this.prerender_progress.text = "Prerendering...";
+
+            // Don't display prerendering text if the user has disabled
+            // it, but still create the control to ensure the layout
+            // doesn't change.
+            if (Options.disable_caching) {
+                this.prerender_progress.text = "";
+            } else {
+                this.prerender_progress.text = "Prerendering...";
+            }
+            this.prerender_progress.set_ellipsize(Pango.EllipsizeMode.END);
             this.prerender_progress.no_show_all = true;
 
             int icon_height = bottom_height - 10;
@@ -262,6 +271,22 @@ namespace pdfpc.Window {
             this.key_press_event.connect(this.presentation_controller.key_press);
             this.button_press_event.connect(this.presentation_controller.button_press);
             this.scroll_event.connect(this.presentation_controller.scroll);
+
+            // resize the bottom text based on the window height
+            // (see http://stackoverflow.com/a/35237445/730138)
+            var bottom_text_css_provider = new Gtk.CssProvider();
+            Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),
+                bottom_text_css_provider, Gtk.STYLE_PROVIDER_PRIORITY_FALLBACK);
+
+            const string bottom_text_css_template = ".bottomText { font-size: %dpx; }";
+            var target_size_height = (int) ((double)this.screen_geometry.height / 400.0 * 12.0);
+            var bottom_css = bottom_text_css_template.printf(target_size_height);
+
+            try {
+                bottom_text_css_provider.load_from_data(bottom_css, -1);
+            } catch (Error e) {
+                stderr.printf("Warning: failed to set CSS for auto-sized bottom controls.\n");
+            }
 
             // Store the slide count once
             this.slide_count = metadata.get_slide_count();
