@@ -10,9 +10,9 @@ Build-Depends: debhelper (>= 9),
 	       libgstreamer1.0-dev, libgstreamer-plugins-base1.0-dev,
 	       libpoppler-glib-dev
 Standards-Version: 3.9.6
-Homepage: http://pdfpc.github.io/pdfpc/
+Homepage: https://pdfpc.github.io
 Vcs-Git: git://anonscm.debian.org/collab-maint/pdf-presenter-console.git
-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/pdf-presenter-console.git
+Vcs-Browser: https://anonscm.debian.org/gitweb/?p=collab-maint/pdf-presenter-console.git
 
 Package: pdf-presenter-console
 Provides: pdfpc
