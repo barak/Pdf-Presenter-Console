@@ -20,18 +20,18 @@ Copyright:
     2012-2015 Robert Schroll <rschroll@gmail.com>
 License: GPL-2.0+
 
-Files: cmake/Vala_CMake/vala/*.cmake
+Files: cmake/vala/*.cmake
 Copyright:
     2009-2010 Jakob Westhoff
     2010-2011 Daniel Pfeifer
-License: BSD
+License: BSD-2-clause
 
 Files: debian/*
 Copyright: 2010-2015 Barak A. Pearlmutter <bap@debian.org>
-License: Public-Domain
+License: public-domain
  This material is hereby released to the public domain.
 
-License: BSD
+License: BSD-2-clause
     # Redistribution and use in source and binary forms, with or without
     # modification, are permitted provided that the following conditions are met:
     # 
