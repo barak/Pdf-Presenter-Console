@@ -2,8 +2,9 @@ pdf-presenter-console (4.0.2-2) unstable; urgency=medium
 
   * update homepage (closes: #820477)
   * bump standards version, no changes required
+  * merge upstream development branch, with FTBFS fix (closes: #819858)
 
- -- Barak A. Pearlmutter <bap@debian.org>  Mon, 18 Apr 2016 09:52:51 +0100
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 02 May 2016 10:41:14 +0100
 
 pdf-presenter-console (4.0.2-1) unstable; urgency=medium
 
