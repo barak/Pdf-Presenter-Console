@@ -17,8 +17,30 @@ software.
 More information, including screenshots and a demo presentation, can be found
 at https://pdfpc.github.io/
 
-Requirements
+Installation
 ============
+- On Ubuntu or Debian systems::
+
+        sudo apt-get install pdf-presenter-console
+- `Compiling from source <#compile-and-install>`_
+- `Compiling from github <#compiling-from-github>`_
+
+Sample presentations
+--------------------
+
+- `Simple demo <https://pdfpc.github.io/demo/pdfpc-demo.pdf>`_
+- `Embedded movies <https://pdfpc.github.io/demo/pdfpc-video-example.zip>`_
+
+Try it out::
+
+    pdfpc pdfpc-demo.pdf
+
+
+Compile and install
+===================
+
+Requirements
+------------
 
 In order to compile and run pdfpc the following
 requirements need to be met:
@@ -30,8 +52,13 @@ requirements need to be met:
 - poppler with glib bindings
 - gstreamer 1.0
 
-Compile and install
-===================
+On Ubuntu systems, you can install these dependencies with::
+
+    sudo apt-get install cmake libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgee-0.8-dev librsvg2-dev libpoppler-glib-dev libgtk2.0-dev libgtk-3-dev valac
+
+and you should consider installing all the available gstreamer codecs::
+
+    sudo apt-get install gstreamer1.0-*
 
 Compiling from source tarballs
 ------------------------------
@@ -116,6 +143,29 @@ building the application::
 
 Congratulations you just installed pdfpc on your system.
 
+Compiling on Windows
+--------------------
+
+On issue #106 there is a short tutorial on how to compile pdfpc on Windows.
+First a cygwin installation with the following depedencies is needed:
+
+- cmake
+- automake
+- make
+- gcc
+- gcc-c++
+- libstdc++-4.8-dev
+- x11
+
+For pdfpc the following compile time dependencies are necessary:
+
+- vala
+- gtk
+- gee
+- libpoppler
+- gstreamer
+- libgstinterfaces1.0-devel (has gstreamer.audio included)
+
 Compiling Trouble Shooting
 --------------------------
 
@@ -125,13 +175,14 @@ try running cmake with::
 
     cmake -DVALA_EXECUTABLE:NAMES=valac-0.28 ..
 
-How to go on
-============
 
-Download the demo presentation from the downloads section and load it into
-pdfpc to get a feeling of it::
+Usage
+=====
+
+Now download some [sample presentations](#sample-presentations) and load  them up::
 
     pdfpc pdfpc-demo.pdf
+
 
 Acknowledgements
 ================
