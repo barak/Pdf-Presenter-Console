@@ -1,4 +1,4 @@
-.TH  pdfpc "1" "February 2016" "pdfpc 4\&.0\&.2"
+.TH  pdfpc "1" "October 2016" "pdfpc 4\&.0\&.3"
 .if !dURL \{\
 .de URL
 \\$2 \(laURL: \\$1 \(ra\\$3
@@ -45,7 +45,7 @@ presentation.
 End time of the presentation. (Format: HH:MM (24h))
 .TP
 .BI "\-l, \-\-last\-minutes"=N
-Time in minutes, from which on the timer changes its color. (Default 5 minutes)
+Time in minutes, from which on the timer changes its color. (Default: 5 minutes)
 .TP
 .BI "\-t, \-\-start\-time"=T
 Start time of the presentation to be used as a countdown. (Format: HH:MM (24h))
@@ -79,7 +79,7 @@ Run in windowed mode
 Size of the presentation window in width:height format (forces windowed mode)
 .TP
 .BI "\-n, \-\-notes"=P
-Position of notes on the PDF page. Position can be either left, right, top or bottom (Default none)
+Position of notes on the PDF page. Position can be either left, right, top or bottom (Default: none)
 .TP
 .BI "\-h, \-\-help"
 Shows the help
@@ -129,6 +129,15 @@ Increase Notes Font Size
 .TP
 .B Minus / KP_Substract / Bracket Right
 Decrease Notes Font Size
+.TP
+.B 8
+Toggle Pointer Mode
+.TP
+.B 7
+Decrease pointer size
+.TP
+.B 9
+Increase pointer size
 .TP
 .B Escape / q
 Exit pdfpc
@@ -325,6 +334,15 @@ In LaTeX, such links are created with
 .PP
 The movie will playback in the area taken by the placeholder content.  Using
 a frame of the movie will ensure the correct aspect ratio.
+
+.SS Pointer Mode
+.PP
+If needed it is possible to turn on a pointer which draws a red dot in the 
+place pointed by mouse cursor on both - presenter and presentation screens. 
+It is also possible to increase and decrease the pointer size. Additionally 
+when the pointer is enabled it is possible to drag & drop some area of the 
+presenter screen causing it to be highlighted in both views as well. Area 
+outside the selected region will be dimmed.
 
 .SS pdfpc Files
 .PP
