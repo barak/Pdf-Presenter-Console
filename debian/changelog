@@ -1,3 +1,10 @@
+pdf-presenter-console (4.0.4-1) unstable; urgency=medium
+
+  * New upstream release
+  * Track upstream bug fixes
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 28 Nov 2016 18:43:48 +0000
+
 pdf-presenter-console (4.0.3-1) unstable; urgency=medium
 
   * New upstream release
