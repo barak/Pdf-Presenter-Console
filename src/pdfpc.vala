@@ -60,6 +60,7 @@ namespace pdfpc {
             { "switch-screens", 's', 0, 0, ref Options.display_switch, "Switch the presentation and the presenter screen.", null },
             { "disable-cache", 'c', 0, 0, ref Options.disable_caching, "Disable caching and pre-rendering of slides to save memory at the cost of speed.", null },
             { "disable-compression", 'z', 0, 0, ref Options.disable_cache_compression, "Disable the compression of slide images to trade memory consumption for speed. (Avg. factor 30)", null },
+            { "persist-cache", 'p', 0, 0, ref Options.persist_cache, "Persist the PNG cache on disk for faster startup.", null },
             { "disable-auto-grouping", 'g', 0, 0, ref Options.disable_auto_grouping, "Disable auto detection and grouping of overlayed slides", null },
             { "single-screen", 'S', 0, 0, ref Options.single_screen, "Force to use only one screen", null },
             { "list-actions", 'L', 0, 0, ref Options.list_actions, "List actions supported in the config file(s)", null},
@@ -102,8 +103,8 @@ namespace pdfpc {
          * Print version string and copyright statement
          */
         private void print_version() {
-            stdout.printf("pdfpc v4.0.4\n"
-                        + "(C) 2015-2016 Robert Schroll, Andreas Bilke, Andy Barry and others\n"
+            stdout.printf("pdfpc v4.0.5\n"
+                        + "(C) 2015-2017 Robert Schroll, Andreas Bilke, Andy Barry, Phillip Berndt and others\n"
                         + "(C) 2012 David Vilar\n"
                         + "(C) 2009-2011 Jakob Westhoff\n\n"
                         + "License GPLv2: GNU GPL version 2 <http://gnu.org/licenses/gpl-2.0.html>.\n"
@@ -154,11 +155,10 @@ namespace pdfpc {
          * while displaying the given file
          */
         private Window.Presenter create_presenter( Metadata.Pdf metadata, int monitor ) {
-            this.controller.presenter = new Window.Presenter( metadata, monitor, this.controller );
-            //controller.register_controllable( controller.presenter );
-            controller.presenter.set_cache_observer( this.cache_status );
+            var presenter = new Window.Presenter(metadata, monitor, this.controller);
+            presenter.set_cache_observer(this.cache_status);
 
-            return controller.presenter;
+            return presenter;
         }
 
         /**
@@ -166,11 +166,10 @@ namespace pdfpc {
          * while displaying the given file
          */
         private Window.Presentation create_presentation( Metadata.Pdf metadata, int monitor, int width = -1, int height = -1 ) {
-            this.controller.presentation = new Window.Presentation( metadata, monitor, this.controller, width, height );
-            //controller.register_controllable( controller.presentation );
-            controller.presentation.set_cache_observer( this.cache_status );
+            var presentation = new Window.Presentation(metadata, monitor, this.controller, width, height);
+            presentation.set_cache_observer( this.cache_status );
 
-            return controller.presentation;
+            return presentation;
         }
 
         /**
@@ -251,7 +250,7 @@ namespace pdfpc {
 
             pdfpc.Metadata.NotesPosition notes_position = pdfpc.Metadata.NotesPosition.from_string(Options.notes_position);
             var metadata = new Metadata.Pdf(GLib.Path.get_basename(pdfFilename), notes_position);
-            if ( Options.duration != 987654321u )
+            if ( Options.duration != uint.MAX)
                 metadata.set_duration(Options.duration);
 
 

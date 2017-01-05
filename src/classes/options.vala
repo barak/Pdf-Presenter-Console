@@ -65,6 +65,11 @@ namespace pdfpc {
         public static bool disable_cache_compression = false;
 
         /**
+         * Commandline option to persist the PNG cache to disk.
+         */
+        public static bool persist_cache = false;
+
+        /**
          * Commandline option to disable the auto detection of overlay slides
          */
         public static bool disable_auto_grouping = false;
@@ -75,7 +80,7 @@ namespace pdfpc {
          *
          * Same problem as above with default value
          */
-        public static uint duration = 987654321u;
+        public static uint duration = uint.MAX;
 
         /**
          * Commandline option providing the time from which on the timer should
@@ -158,12 +163,12 @@ namespace pdfpc {
          * Global storage for key un/bindings from the config file.
          * Used to post pone binding execution in presentation controller
          */
-        public static Gee.ArrayList<BindTuple> key_bindings;
+        public static Gee.List<BindTuple> key_bindings;
 
         /**
          * Global storage for mouse un/bindings from the config file.
          * Used to post pone binding execution in presentation controller
          */
-        public static Gee.ArrayList<BindTuple> mouse_bindings;
+        public static Gee.List<BindTuple> mouse_bindings;
     }
 }

@@ -51,18 +51,18 @@ namespace pdfpc.Window {
         /**
          * View showing the current slide
          */
-        public View.Base current_view;
+        public View.Pdf current_view;
 
         /**
          * View showing a preview of the next slide
          */
-        protected View.Base next_view;
+        protected View.Pdf next_view;
 
         /**
          * Small views for (non-user) next slides
          */
-        protected View.Base strict_next_view;
-        protected View.Base strict_prev_view;
+        protected View.Pdf strict_next_view;
+        protected View.Pdf strict_prev_view;
 
         /**
          * Timer for the presenation
@@ -123,12 +123,6 @@ namespace pdfpc.Window {
          * Width of next/notes area
          **/
         protected int next_allocated_width;
-
-        private Gtk.Fixed fixedLayout;
-
-        public void add_to_fixed(Gtk.Widget w, int x, int y) {
-               fixedLayout.put(w, y, y);
-        }
 
         /**
          * Base constructor instantiating a new presenter window
@@ -248,6 +242,7 @@ namespace pdfpc.Window {
             this.slide_progress.sensitive = false;
             this.slide_progress.has_frame = false;
             this.slide_progress.key_press_event.connect(this.on_key_press_slide_progress);
+            this.slide_progress.valign = Gtk.Align.END;
 
             this.prerender_progress = new Gtk.ProgressBar();
             this.prerender_progress.name = "prerenderProgress";
@@ -264,7 +259,7 @@ namespace pdfpc.Window {
             this.prerender_progress.set_ellipsize(Pango.EllipsizeMode.END);
             this.prerender_progress.no_show_all = true;
 
-            int icon_height = bottom_height - 10;
+            int icon_height = (int)Math.round(bottom_height*0.9);;
 
             this.blank_icon = this.load_icon("blank.svg", icon_height);
             this.frozen_icon = this.load_icon("snow.svg", icon_height);
@@ -304,17 +299,79 @@ namespace pdfpc.Window {
 
             // Enable the render caching if it hasn't been forcefully disabled.
             if (!Options.disable_caching) {
-                ((Renderer.Caching) this.current_view.get_renderer()).cache =
-                    Renderer.Cache.create(metadata);
-                ((Renderer.Caching) this.next_view.get_renderer()).cache =
-                    Renderer.Cache.create(metadata);
-                ((Renderer.Caching) this.strict_next_view.get_renderer()).cache =
-                    Renderer.Cache.create(metadata);
-                ((Renderer.Caching)this.strict_prev_view.get_renderer()).cache =
-                    Renderer.Cache.create(metadata);
+                this.current_view.get_renderer().cache = Renderer.Cache.create(metadata);
+                this.next_view.get_renderer().cache = Renderer.Cache.create(metadata);
+                this.strict_next_view.get_renderer().cache = Renderer.Cache.create(metadata);
+                this.strict_prev_view.get_renderer().cache = Renderer.Cache.create(metadata);
             }
 
-            this.build_layout();
+            Gtk.Box slide_views = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 4);
+
+            var strict_views = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
+            strict_views.pack_start(this.strict_prev_view, false, false, 0);
+            strict_views.pack_end(this.strict_next_view, false, false, 0);
+
+            this.current_view.halign = Gtk.Align.CENTER;
+            this.current_view.valign = Gtk.Align.CENTER;
+
+            fixed_layout.put(current_view, 0, 0);
+
+            var current_view_and_stricts = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
+            current_view_and_stricts.pack_start(fixed_layout, false, false, 0);
+            current_view_and_stricts.pack_start(strict_views, false, false, 0);
+
+
+            slide_views.pack_start(current_view_and_stricts, true, true, 0);
+
+            var nextViewWithNotes = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
+            nextViewWithNotes.set_size_request(this.next_allocated_width, -1);
+            this.next_view.halign = Gtk.Align.CENTER;
+            this.next_view.valign = Gtk.Align.CENTER;
+            nextViewWithNotes.pack_start(next_view, false, false, 0);
+            var notes_sw = new Gtk.ScrolledWindow(null, null);
+            notes_sw.set_size_request(this.next_allocated_width, -1);
+            notes_sw.add(this.notes_view);
+            notes_sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC);
+            nextViewWithNotes.pack_start(notes_sw, true, true, 5);
+            slide_views.pack_start(nextViewWithNotes, true, true, 0);
+
+            this.overview.halign = Gtk.Align.CENTER;
+            this.overview.valign = Gtk.Align.CENTER;
+
+            this.slide_stack = new Gtk.Stack();
+            this.slide_stack.add_named(slide_views, "slides");
+            this.slide_stack.add_named(this.overview, "overview");
+            this.slide_stack.homogeneous = true;
+
+            var bottom_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
+            bottom_row.set_size_request(this.screen_geometry.width, bottom_height);
+            bottom_row.homogeneous = true;
+
+            var status = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 2);
+            status.pack_start(this.blank_icon, false, false, 0);
+            status.pack_start(this.frozen_icon, false, false, 0);
+            status.pack_start(this.pause_icon, false, false, 0);
+
+            this.timer.halign = Gtk.Align.CENTER;
+            this.timer.valign = Gtk.Align.END;
+
+            var progress_alignment = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
+            progress_alignment.expand = false;
+            progress_alignment.pack_end(this.slide_progress);
+            this.prerender_progress.vexpand = false;
+            this.prerender_progress.valign = Gtk.Align.END;
+            progress_alignment.pack_end(this.prerender_progress, true, true, 0);
+
+            bottom_row.pack_start(status, true, true, 0);
+            bottom_row.pack_start(this.timer, true, true, 0);
+            bottom_row.pack_end(progress_alignment, true, true, 0);
+
+            Gtk.Box full_layout = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
+            full_layout.set_size_request(this.screen_geometry.width, this.screen_geometry.height);
+            full_layout.pack_start(this.slide_stack, true, true, 0);
+            full_layout.pack_end(bottom_row, false, false, 0);
+
+            this.add(full_layout);
         }
 
         public override void show() {
@@ -348,83 +405,11 @@ namespace pdfpc.Window {
             return icon;
         }
 
-        protected void build_layout() {
-            Gtk.Box slide_views = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 4);
-
-            var strict_views = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
-            strict_views.pack_start(this.strict_prev_view, false, false, 0);
-            strict_views.pack_end(this.strict_next_view, false, false, 0);
-
-            this.current_view.halign = Gtk.Align.CENTER;
-            this.current_view.valign = Gtk.Align.CENTER;
-
-
-
-            fixedLayout = new Gtk.Fixed();
-            fixedLayout.put(current_view, 0, 0);
-
-            var current_view_and_stricts = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-            current_view_and_stricts.pack_start(fixedLayout, false, false, 0);
-            current_view_and_stricts.pack_start(strict_views, false, false, 0);
-
-
-            slide_views.pack_start(current_view_and_stricts, true, true, 0);
-
-            var nextViewWithNotes = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-            nextViewWithNotes.set_size_request(this.next_allocated_width, -1);
-            this.next_view.halign = Gtk.Align.CENTER;
-            this.next_view.valign = Gtk.Align.CENTER;
-            nextViewWithNotes.pack_start(next_view, false, false, 0);
-            var notes_sw = new Gtk.ScrolledWindow(null, null);
-            notes_sw.set_size_request(this.next_allocated_width, -1);
-            notes_sw.add(this.notes_view);
-            notes_sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC);
-            nextViewWithNotes.pack_start(notes_sw, true, true, 5);
-            slide_views.pack_start(nextViewWithNotes, true, true, 0);
-
-            this.overview.halign = Gtk.Align.CENTER;
-            this.overview.valign = Gtk.Align.CENTER;
-
-            this.slide_stack = new Gtk.Stack();
-            this.slide_stack.add_named(slide_views, "slides");
-            this.slide_stack.add_named(this.overview, "overview");
-            this.slide_stack.homogeneous = true;
-
-            var bottom_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
-            bottom_row.homogeneous = true;
-
-            var status = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 2);
-            status.pack_start(this.blank_icon, false, false, 0);
-            status.pack_start(this.frozen_icon, false, false, 0);
-            status.pack_start(this.pause_icon, false, false, 0);
-
-            this.timer.halign = Gtk.Align.CENTER;
-            this.timer.valign = Gtk.Align.CENTER;
-
-            var progress_alignment = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
-            progress_alignment.expand = false;
-            progress_alignment.pack_end(this.slide_progress);
-            this.prerender_progress.vexpand = false;
-            this.prerender_progress.valign = Gtk.Align.CENTER;
-            progress_alignment.pack_end(this.prerender_progress, true, true, 0);
-
-            bottom_row.pack_start(status, true, true, 0);
-            bottom_row.pack_start(this.timer, true, true, 0);
-            bottom_row.pack_end(progress_alignment, true, true, 0);
-
-            Gtk.Box full_layout = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-            full_layout.set_size_request(this.screen_geometry.width, this.screen_geometry.height);
-            full_layout.pack_start(this.slide_stack, true, true, 0);
-            full_layout.pack_end(bottom_row, false, false, 0);
-
-            this.add(full_layout);
-        }
-
         /**
          * Update the slide count view
          */
         protected void update_slide_count() {
-            this.custom_slide_count(this.presentation_controller.current_user_slide_number + 1);
+            this.custom_slide_count(this.metadata.real_slide_to_user_slide(this.presentation_controller.current_slide_number) + 1);
         }
 
         public void custom_slide_count(int current) {
@@ -553,9 +538,9 @@ namespace pdfpc.Window {
         }
 
         public void show_overview() {
+            this.overview.current_slide = this.presentation_controller.current_user_slide_number;
             this.slide_stack.set_visible_child_name("overview");
             this.overview.ensure_focus();
-            this.overview.current_slide = this.presentation_controller.current_user_slide_number;
         }
 
         public void hide_overview() {
@@ -571,14 +556,8 @@ namespace pdfpc.Window {
          * for display, as it is a Image widget after all.
          */
         public void set_cache_observer(CacheStatus observer) {
-            var current_prerendering_view = this.current_view as View.Prerendering;
-            if (current_prerendering_view != null) {
-                observer.monitor_view(current_prerendering_view);
-            }
-            var next_prerendering_view = this.next_view as View.Prerendering;
-            if (next_prerendering_view != null) {
-                observer.monitor_view(next_prerendering_view);
-            }
+            observer.monitor_view(this.current_view);
+            observer.monitor_view(this.next_view);
 
             observer.update_progress.connect(this.prerender_progress.set_fraction);
             observer.update_complete.connect(this.prerender_finished);
@@ -587,7 +566,7 @@ namespace pdfpc.Window {
 
         public void prerender_finished() {
             this.prerender_progress.opacity = 0;  // hide() causes a flash for re-layout.
-            this.overview.set_cache(((Renderer.Caching) this.next_view.get_renderer()).cache);
+            this.overview.set_cache(this.next_view.get_renderer().cache);
         }
 
         /**

@@ -1,9 +1,9 @@
 .history
 .*.swp
-build/
-src/paths.vala
-c-src/paths.c
-man/pdfpc.1
-src/icon_path.vala
-c-src/icon_path.c
+/build/
+/src/paths.vala
+/src/icon_path.vala
+/c-src/
+/man/pdfpc.1
+/man/pdfpcrc.5
 /obj-*/

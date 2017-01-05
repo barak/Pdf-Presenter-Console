@@ -31,8 +31,19 @@ namespace pdfpc.Metadata {
     /**
      * Metadata for Pdf files
      */
-    public class Pdf: Base
-    {
+    public class Pdf: Object {
+        /**
+         * Unique Resource Locator for the given slideset
+         */
+        protected string url;
+
+        /**
+         * Return the registered url
+         */
+        public string get_url() {
+            return this.url;
+        }
+
         public string? pdf_fname = null;
         protected string? pdfpc_fname = null;
 
@@ -302,7 +313,7 @@ namespace pdfpc.Metadata {
          * Base constructor taking the file url to the pdf file
          */
         public Pdf(string fname, NotesPosition notes_position) {
-            base(fname);
+            this.url = File.new_for_commandline_arg(fname).get_uri();
 
             this.notes_position = notes_position;
 
@@ -353,7 +364,7 @@ namespace pdfpc.Metadata {
         /**
          * Return the number of pages in the pdf document
          */
-        public override uint get_slide_count() {
+        public uint get_slide_count() {
             return this.page_count;
         }
 
@@ -432,9 +443,14 @@ namespace pdfpc.Metadata {
 
         /**
          * Transform from user slide numbers to real slide numbers
+         *
+         * If lastSlide is true, the last page of an overlay will be return,
+         * otherwise, the first one
          */
-        public int user_slide_to_real_slide(int number) {
-            if (number < user_view_indexes.length) {
+        public int user_slide_to_real_slide(int number, bool lastSlide = true) {
+            if (lastSlide && number + 1 < user_view_indexes.length) {
+                return this.user_view_indexes[number+1] - 1;
+            } else if (number < user_view_indexes.length) {
                 return this.user_view_indexes[number];
             } else {
                 return (int)this.page_count;
@@ -445,7 +461,7 @@ namespace pdfpc.Metadata {
             // Here we could do a binary search
             int user_slide = 0;
             for (int u = 0; u < this.get_user_slide_count(); ++u) {
-                int real_slide = this.user_slide_to_real_slide(u);
+                int real_slide = this.user_view_indexes[u];
                 if (number == real_slide) {
                     user_slide = u;
                     break;

@@ -32,12 +32,12 @@ namespace pdfpc.Renderer.Cache {
         /**
          * Metadata object to provide caching for
          */
-        protected Metadata.Base metadata;
+        protected Metadata.Pdf metadata;
 
         /**
          * Initialize the cache store
          */
-        public Base(Metadata.Base metadata) {
+        public Base(Metadata.Pdf metadata) {
             this.metadata = metadata;
         }
 
@@ -69,9 +69,14 @@ namespace pdfpc.Renderer.Cache {
     /**
      * Creates cache engines based on the global commandline options
      */
-    public Base create(Metadata.Base metadata) {
-        if (!Options.disable_cache_compression)
+    public Base create(Metadata.Pdf metadata) {
+        if (Options.persist_cache) {
+            return new PNG.Persistent.Engine(metadata);
+        }
+
+        if (!Options.disable_cache_compression) {
             return new PNG.Engine(metadata);
+        }
 
         return new Simple.Engine(metadata);
     }
