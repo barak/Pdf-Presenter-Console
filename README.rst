@@ -28,7 +28,6 @@ Installation
         sudo dnf install pdfpc
 
 - `Compiling from source <#compile-and-install>`_
-- `Compiling from github <#compiling-from-github>`_
 
 Sample presentations
 --------------------
@@ -56,10 +55,11 @@ requirements need to be met:
 - gee 0.8
 - poppler with glib bindings
 - gstreamer 1.0
+- pangocairo
 
 On Ubuntu systems, you can install these dependencies with::
 
-    sudo apt-get install cmake libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgee-0.8-dev librsvg2-dev libpoppler-glib-dev libgtk2.0-dev libgtk-3-dev valac
+    sudo apt-get install cmake valac libgee-0.8-dev libpoppler-glib-dev libgtk-3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 
 and you should consider installing all the available gstreamer codecs::
 
@@ -107,7 +107,7 @@ Compiling on Windows
 --------------------
 
 On issue #106 there is a short tutorial on how to compile pdfpc on Windows.
-First a cygwin installation with the following depedencies is needed:
+First a cygwin installation with the following dependencies is needed:
 
 - cmake
 - automake
@@ -131,14 +131,14 @@ Compiling in Mac OS X (Yosemite)
 
 First, install homebrew as described on their webpage, then install the dependencies::
 
-    brew install cmake vala gtk+3 libgee poppler
+    brew install cmake vala gtk+3 libgee poppler librsvg libcroco
 
 You need to call cmake with::
 
     cmake -DMOVIES=off
 
 since Yosemite has no X11 implementation, and the movie playback uses X11
-features. Note that the icons don't load (see issue #179)
+features.
 
 Compiling Trouble Shooting
 --------------------------
@@ -159,14 +159,27 @@ Now download some [sample presentations](#sample-presentations) and load  them u
 
 FAQ
 ===
-* Embedded video playback is not working.
- * You likely have a ``gstreamer`` codec issue.  Try loading the video file you want to play with the following command: ``gst-launch-1.0 filesrc location=<your video> ! decodebin ! autovideosink``  If the video plays, go ahead and `submit an issue <https://github.com/pdfpc/pdfpc/issues>`_.  Otherwise, the command will likely output some good hints for why gstreamer cannot decode the video.
+
+Embedded video playback is not working.
+---------------------------------------
+
+You likely have a ``gstreamer`` codec issue.  Try loading the video file you want to play with the following command: ``gst-launch-1.0 filesrc location=<your video> ! decodebin ! autovideosink``  If the video plays, go ahead and `submit an issue <https://github.com/pdfpc/pdfpc/issues>`_.  Otherwise, the command will likely output some good hints for why gstreamer cannot decode the video.
+
+Windows do not appear on the correct screen.
+---------------------------------------------------
+
+For tiling window managers, the movement and fullscreening of the windows do not work reliable.
+It is therefore important to tell your WM to force floating the pdfpc windows.
+
+If you are using i3-wm add this to your config file::
+
+    for_window [ title="^pdfpc - present" ] border none floating enable
 
 Acknowledgements
 ================
 
 pdfpc has been developed by Jakob Westhoff, David Vilar, Robert Schroll, Andreas
-Bilke, Andy Barry, and others.  It was previously available at
+Bilke, Andy Barry, Phillip Berndt and others. It was previously available at
 https://github.com/davvil/pdfpc
 
 pdfpc is a fork of Pdf Presenter Console by Jakob Westhoff, available at

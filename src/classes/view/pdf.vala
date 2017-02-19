@@ -94,12 +94,20 @@ namespace pdfpc {
         protected GLib.List<View.Behaviour.Base> behaviours = new GLib.List<View.Behaviour.Base>();
 
         /**
+         * GDK scale factor
+         */
+        protected int gdk_scale = 1;
+
+        /**
          * Default constructor restricted to Pdf renderers as input parameter
          */
         public Pdf(Renderer.Pdf renderer, bool allow_black_on_end, bool clickable_links,
-            PresentationController presentation_controller) {
+            PresentationController presentation_controller, int gdk_scale_factor) {
             this.renderer = renderer;
-            this.set_size_request(renderer.width, renderer.height);
+            this.gdk_scale = gdk_scale_factor;
+
+            this.set_size_request((int)(renderer.width*(1.0/this.gdk_scale)),
+                                  (int)(renderer.height*(1.0/this.gdk_scale)));
 
             this.current_slide_number = 0;
 
@@ -108,22 +116,23 @@ namespace pdfpc {
             // Render the initial page on first realization.
             this.add_events(Gdk.EventMask.STRUCTURE_MASK);
             this.realize.connect(() => {
-                 try {
-                     this.display( this.current_slide_number );
-                 } catch( Renderer.RenderError e ) {
-                     // There should always be a page 0 but you never know.
-                     error("Could not render initial page %d: %s",
-                         this.current_slide_number, e.message);
-                 }
+                try {
+                    this.display( this.current_slide_number );
+                } catch( Renderer.RenderError e ) {
+                    // There should always be a page 0 but you never know.
+                    GLib.printerr("Could not render initial page %d: %s\n",
+                        this.current_slide_number, e.message);
+                    Process.exit(1);
+                }
 
-                 // Start the prerender cycle if the renderer supports caching
-                 // and the used cache engine allows prerendering.
-                 // Executing the cycle here to ensure it is executed within the
-                 // Gtk event loop. If it is not proper Gdk thread handling is
-                 // impossible.
-                 if (renderer.cache != null && renderer.cache.allows_prerendering()) {
-                     this.register_prerendering();
-                 }
+                // Start the prerender cycle if the renderer supports caching
+                // and the used cache engine allows prerendering.
+                // Executing the cycle here to ensure it is executed within the
+                // Gtk event loop. If it is not proper Gdk thread handling is
+                // impossible.
+                if (renderer.cache != null && renderer.cache.allows_prerendering()) {
+                    this.register_prerendering();
+                }
             });
 
             if (clickable_links) {
@@ -142,13 +151,17 @@ namespace pdfpc {
          * argument.
          */
         public Pdf.from_metadata(Metadata.Pdf metadata, int width, int height,
-            Metadata.Area area, bool allow_black_on_end, bool clickable_links,
-            PresentationController presentation_controller, out Gdk.Rectangle scale_rect = null) {
+                                 Metadata.Area area, bool allow_black_on_end, bool clickable_links,
+                                 PresentationController presentation_controller, int gdk_scale_factor, out Gdk.Rectangle scale_rect = null) {
             var scaler = new Scaler(metadata.get_page_width(), metadata.get_page_height());
             scale_rect = scaler.scale_to(width, height);
+
+            scale_rect.width *= gdk_scale_factor;
+            scale_rect.height *= gdk_scale_factor;
+
             var renderer = new Renderer.Pdf(metadata, scale_rect.width, scale_rect.height, area);
 
-            this(renderer, allow_black_on_end, clickable_links, presentation_controller);
+            this(renderer, allow_black_on_end, clickable_links, presentation_controller, gdk_scale_factor);
         }
 
         /**
@@ -166,7 +179,7 @@ namespace pdfpc {
 
             // We need the page dimensions for coordinate conversion between
             // pdf coordinates and screen coordinates
-            var metadata = this.get_renderer().metadata as Metadata.Pdf;
+            var metadata = this.get_renderer().metadata;
             gdk_rectangle.x = (int) Math.ceil((poppler_rectangle.x1 / metadata.get_page_width()) *
                 requisition.width );
             gdk_rectangle.width = (int) Math.floor(((poppler_rectangle.x2 - poppler_rectangle.x1 ) /
@@ -212,7 +225,8 @@ namespace pdfpc {
                 try {
                     this.get_renderer().render_to_surface(*i);
                 } catch(Renderer.RenderError e) {
-                    error("Could not render page '%i' while pre-rendering: %s", *i, e.message);
+                    GLib.printerr("Could not render page '%i' while pre-rendering: %s\n", *i, e.message);
+                    Process.exit(1);
                 }
 
                 // Inform possible observers about the cached slide
@@ -242,7 +256,8 @@ namespace pdfpc {
             try {
                 behaviour.associate(this);
             } catch(Behaviour.AssociationError e) {
-                error("Behaviour association failure: %s", e.message);
+                GLib.printerr("Behaviour association failure: %s\n", e.message);
+                Process.exit(1);
             }
         }
 
@@ -282,7 +297,7 @@ namespace pdfpc {
             this.current_slide_number = slide_number;
 
             // Have Gtk update the widget
-            this.queue_draw_area(0, 0, this.renderer.width, this.renderer.height);
+            this.queue_draw();
 
             this.entering_slide(this.current_slide_number);
         }
@@ -292,7 +307,7 @@ namespace pdfpc {
          */
         public void fade_to_black() {
             this.current_slide = this.renderer.fade_to_black();
-            this.queue_draw_area(0, 0, this.renderer.width, this.renderer.height);
+            this.queue_draw();
         }
 
         /**
@@ -316,6 +331,7 @@ namespace pdfpc {
          * the window surface.
          */
         public override bool draw(Cairo.Context cr) {
+            cr.scale((1.0/this.gdk_scale), (1.0/this.gdk_scale));
             cr.set_source_surface(this.current_slide, 0, 0);
             cr.rectangle(0, 0, this.current_slide.get_width(), this.current_slide.get_height());
             cr.fill();

@@ -6,7 +6,7 @@
  * Copyright (C) 2010-2011 Jakob Westhoff <jakob@westhoffswelt.de>
  * Copyright 2011-2012 David Vilar
  * Copyright 2012, 2015 Robert Schroll
- * Copyright 2012, 2015 Andreas Bilke
+ * Copyright 2012, 2015, 2017 Andreas Bilke
  * Copyright 2013 Gabor Adam Toth
  * Copyright 2015-2016 Andy Barry
  * Copyright 2015 Jeremy Maitin-Shepard
@@ -44,7 +44,7 @@ namespace pdfpc.Window {
          */
         public View.Pdf main_view {
             get {
-                return this.current_view as View.Pdf;
+                return this.current_view;
             }
         }
 
@@ -107,14 +107,6 @@ namespace pdfpc.Window {
         protected Gtk.Stack slide_stack;
 
         /**
-         * Number of slides inside the presentation
-         *
-         * This value is needed a lot of times therefore it is retrieved once
-         * and stored here for performance and readability reasons.
-         */
-        protected uint slide_count;
-
-        /**
          * Metadata of the slides
          */
         protected Metadata.Pdf metadata;
@@ -167,6 +159,7 @@ namespace pdfpc.Window {
                 Options.black_on_end,
                 true,
                 this.presentation_controller,
+                this.gdk_scale,
                 out current_scale_rect
             );
 
@@ -187,6 +180,7 @@ namespace pdfpc.Window {
                 true,
                 false,
                 this.presentation_controller,
+                this.gdk_scale,
                 out next_scale_rect
             );
 
@@ -198,6 +192,7 @@ namespace pdfpc.Window {
                 true,
                 false,
                 this.presentation_controller,
+                this.gdk_scale,
                 out next_scale_rect
             );
             this.strict_prev_view = new View.Pdf.from_metadata(
@@ -208,6 +203,7 @@ namespace pdfpc.Window {
                 true,
                 false,
                 this.presentation_controller,
+                this.gdk_scale,
                 out next_scale_rect
             );
 
@@ -243,6 +239,9 @@ namespace pdfpc.Window {
             this.slide_progress.has_frame = false;
             this.slide_progress.key_press_event.connect(this.on_key_press_slide_progress);
             this.slide_progress.valign = Gtk.Align.END;
+            // reduce the width of Gtk.Entry. we reserve a width for
+            // 7 chars (i.e. maximal 999/999 for displaying)
+            this.slide_progress.width_chars = 7;
 
             this.prerender_progress = new Gtk.ProgressBar();
             this.prerender_progress.name = "prerenderProgress";
@@ -258,6 +257,7 @@ namespace pdfpc.Window {
             }
             this.prerender_progress.set_ellipsize(Pango.EllipsizeMode.END);
             this.prerender_progress.no_show_all = true;
+            this.prerender_progress.valign = Gtk.Align.END;
 
             int icon_height = (int)Math.round(bottom_height*0.9);;
 
@@ -286,13 +286,12 @@ namespace pdfpc.Window {
             try {
                 bottom_text_css_provider.load_from_data(bottom_css, -1);
             } catch (Error e) {
-                stderr.printf("Warning: failed to set CSS for auto-sized bottom controls.\n");
+                GLib.printerr("Warning: failed to set CSS for auto-sized bottom controls.\n");
             }
 
-            // Store the slide count once
-            this.slide_count = metadata.get_slide_count();
-
             this.overview = new Overview(this.metadata, this.presentation_controller, this);
+            this.overview.vexpand = true;
+            this.overview.hexpand = true;
             this.overview.set_n_slides(this.presentation_controller.user_n_slides);
             this.presentation_controller.set_overview(this.overview);
             this.presentation_controller.register_controllable(this);
@@ -320,7 +319,6 @@ namespace pdfpc.Window {
             current_view_and_stricts.pack_start(fixed_layout, false, false, 0);
             current_view_and_stricts.pack_start(strict_views, false, false, 0);
 
-
             slide_views.pack_start(current_view_and_stricts, true, true, 0);
 
             var nextViewWithNotes = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
@@ -334,9 +332,6 @@ namespace pdfpc.Window {
             notes_sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC);
             nextViewWithNotes.pack_start(notes_sw, true, true, 5);
             slide_views.pack_start(nextViewWithNotes, true, true, 0);
-
-            this.overview.halign = Gtk.Align.CENTER;
-            this.overview.valign = Gtk.Align.CENTER;
 
             this.slide_stack = new Gtk.Stack();
             this.slide_stack.add_named(slide_views, "slides");
@@ -356,15 +351,12 @@ namespace pdfpc.Window {
             this.timer.valign = Gtk.Align.END;
 
             var progress_alignment = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
-            progress_alignment.expand = false;
-            progress_alignment.pack_end(this.slide_progress);
-            this.prerender_progress.vexpand = false;
-            this.prerender_progress.valign = Gtk.Align.END;
-            progress_alignment.pack_end(this.prerender_progress, true, true, 0);
+            progress_alignment.pack_start(this.prerender_progress);
+            progress_alignment.pack_end(this.slide_progress, false);
 
-            bottom_row.pack_start(status, true, true, 0);
-            bottom_row.pack_start(this.timer, true, true, 0);
-            bottom_row.pack_end(progress_alignment, true, true, 0);
+            bottom_row.pack_start(status);
+            bottom_row.pack_start(this.timer);
+            bottom_row.pack_end(progress_alignment);
 
             Gtk.Box full_layout = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
             full_layout.set_size_request(this.screen_geometry.width, this.screen_geometry.height);
@@ -394,12 +386,16 @@ namespace pdfpc.Window {
 
             Gtk.Image icon;
             try {
-                Gdk.Pixbuf pixbuf = new Gdk.Pixbuf.from_file_at_size(load_icon_path,
-                    (int) Math.floor(1.06 * icon_height), icon_height);
-                icon = new Gtk.Image.from_pixbuf(pixbuf);
+                int width = (int) Math.floor(1.06 * icon_height) * this.gdk_scale;
+                int height = icon_height * this.gdk_scale;
+
+                Gdk.Pixbuf pixbuf = new Gdk.Pixbuf.from_file_at_size(load_icon_path, width, height);
+                Cairo.Surface surface = Gdk.cairo_surface_create_from_pixbuf(pixbuf, 0, null);
+
+                icon = new Gtk.Image.from_surface(surface);
                 icon.no_show_all = true;
             } catch (Error e) {
-                stderr.printf("Warning: Could not load icon %s (%s)\n", load_icon_path, e.message);
+                GLib.printerr("Warning: Could not load icon %s (%s)\n", load_icon_path, e.message);
                 icon = new Gtk.Image.from_icon_name("image-missing", Gtk.IconSize.LARGE_TOOLBAR);
             }
             return icon;
@@ -436,7 +432,8 @@ namespace pdfpc.Window {
                 }
             }
             catch( Renderer.RenderError e ) {
-                error("The pdf page %d could not be rendered: %s", current_slide_number, e.message);
+                GLib.printerr("The pdf page %d could not be rendered: %s\n", current_slide_number, e.message);
+                Process.exit(1);
             }
             this.update_slide_count();
             this.update_note();
@@ -463,7 +460,8 @@ namespace pdfpc.Window {
                 this.current_view.display(page_number);
                 this.next_view.display(page_number + 1);
             } catch( Renderer.RenderError e ) {
-                error("The pdf page %d could not be rendered: %s", page_number, e.message);
+                GLib.printerr("The pdf page %d could not be rendered: %s\n", page_number, e.message);
+                Process.exit(1);
             }
 
             this.update_slide_count();

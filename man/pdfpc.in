@@ -61,6 +61,9 @@ Position of notes on the PDF page. Position can be either left, right, top or bo
 .BI "\-p, \-\-persist\-cache"
 Persist the PNG cache on disk for faster startup.
 .TP
+.BI "\-P, \-\-page"
+Goto a specific page directly after startup. In case of overlays, the first slide will be displayed.
+.TP
 .BI "\-s, \-\-switch\-screens"
 Switch the presentation and the presenter screen.
 .TP
@@ -79,6 +82,13 @@ Disable the compression of slide images to trade memory consumption for speed.
 .TP
 .BI "\-Z, \-\-size"
 Size of the presentation window in width:height format (forces windowed mode)
+
+.PP
+
+Some previous command line options (like black-on-end) where moved to permanent
+config file options. See
+.B pdfpcrc(5)
+for further details.
 
 .SH KEYBINDINGS
 These are the default keybindings for pdfpc:
@@ -370,29 +380,39 @@ outside the selected region will be dimmed.
 
 .SS pdfpc Files
 .PP
-The notes and other additional information are stored in a file with the
-extension "pdfpc".
-When pdfpc is invoked with a PDF file, it
-automatically checks for and loads the associated pdfpc file, if it exists.
-This means that you normally do not have to deal with this kind of files
-explicitly.
+The several additional information are stored in a file with the extension
+"pdfpc".  When pdfpc is invoked with a PDF file, it automatically checks for
+and loads the associated pdfpc file, if it exists.  This means that you
+normally do not have to deal with this kind of files explicitly.
+.PP
+Beside internal configiration, the following user contributed command line
+options are stored within the pdfpc file for later usage:
+
+.IP \[bu] 2
+duration
+.IP \[bu] 2
+end_time
+.IP \[bu] 2
+last_minutes
+.IP \[bu] 2
+notes (position)
+.IP \[bu] 2
+start_time
+
 .PP
 There are however cases where you may want to edit the files manually.
 The most typical case is if you add or remove some slides after you have
 edited notes or defined overlays.
 It may be quicker to edit the pdfpc file than to re-enter the whole
 information.
-Future versions may include external tools for dealing with this case
-automatically.
+
 .PP
 The files are plain-text files that should be fairly self-explanatory.
 A couple of things to note:
 .IP \[bu] 2
 The slide numbers of the notes refer to user slides
 .IP \[bu] 2
-The [notes] sections must be the last one in the file
-.IP \[bu] 2
-For the programmers out there: slide indexes start at 1
+Slide indexes start at 1
 
 .SS Appearance
 
@@ -402,7 +422,9 @@ locations where pdfpc is looking for files. The default location is
 @CMAKE_INSTALL_PREFIX@/share/pixmaps/pdfpc/pdfpc.css. A user can copy
 it to $XDG_CONFIG_HOME/pdfpc/pdfpc.css and change the attributes as he likes.
 
-.SH INTEGRATION WITH OTHER TOOLS
+.SS Integration with other tools
+
+.PP
 Pdfpc provides a dbus interface that other tools can use to execute any
 action listed by \fB--list-actions\fR.  The interface appears on the session bus
 as \fI io.github.pdfpc\fR.
@@ -410,12 +432,8 @@ as \fI io.github.pdfpc\fR.
 .SH BUGS
 
 .PP
-There may be a small memory leak in the program. I am trying to solve it. It
-should not be too important for up to some hundreds of slides.
-
-.PP
-Other bugs can be reported at
-.URL https://github.com/pdfpc/pdfpc/issues "the issue tracker" .
+Bugs can be reported at
+.URL https://github.com/pdfpc/pdfpc/issues "our issue tracker" .
 
 .SH ACKNOWLEDGEMENTS
 pdfpc was previously developed by
@@ -428,3 +446,26 @@ pdfpc is a fork of Pdf Presenter Console, available
 .PP
 pdfpcrc(5)
 
+There are several other programs with similar functionality.
+
+.BR impressive (1)
+has nice transition effects.
+
+.BR hpdfp (1)
+is the
+.URL http://michaeldadams.org/projects/haskell-pdf-presenter/ "Haskell PDF Presenter"
+program, which packs an amazing level of functionality into not many lines of Haskell.
+
+.BR pympress (1)
+is a little
+.URL https://github.com/Cimbali/pympress "PDF reader written in Python"
+which handles dual screens and beamer notes.
+
+.BR dspdfviewer (1)
+is also specialized for beamer-produced wide PDF with notes.
+
+Many PDF viewers have full-screen presentation modes, but without dual-monitor preview or notes or a timer. These include
+.BR zathura (1),
+.BR evince (1),
+and
+.BR okular (1).

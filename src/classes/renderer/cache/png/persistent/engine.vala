@@ -44,28 +44,23 @@ namespace pdfpc.Renderer.Cache {
             cache_instance_counter++;
             cache_instance_id = cache_instance_counter;
 
-            var environment = GLib.Environ.get();
-            var cache_home = GLib.Environ.get_variable(environment, "XDG_CACHE_HOME");
-            if (cache_home == null) {
-                var home_dir =  GLib.Environ.get_variable(environment, "HOME");
-                cache_directory = Path.build_filename(home_dir, ".cache", "pdfpc");
-            } else {
-                cache_directory = Path.build_filename(cache_home, "pdfpc");
-            }
+            var cache_base_directory = GLib.Environment.get_user_cache_dir();
+            this.cache_directory = Path.build_filename(cache_base_directory, "pdfpc");
 
             try {
                 var pdf_file = File.new_for_uri(metadata.get_url());
                 var pdf_file_info = pdf_file.query_info(FileAttribute.TIME_MODIFIED, 0);
                 pdf_file_age = pdf_file_info.get_modification_time();
             } catch (GLib.Error e) {
-                warning("cannot query pdf file modification date");
+                GLib.printerr("Cannot query pdf file modification date\n");
                 Process.exit(1);
             }
         }
 
         protected string get_cache_filename(uint index) {
             if (cache_width == null || cache_height == null) {
-                error("This method cannot be called before the size of the images in the cache is known.");
+                GLib.printerr("This method cannot be called before the size of the images in the cache is known.\n");
+                Process.exit(1);
             }
 
             var file_name = GLib.Checksum.compute_for_string(GLib.ChecksumType.SHA1,
@@ -95,7 +90,8 @@ namespace pdfpc.Renderer.Cache {
                 }
                 cache_file.replace_contents(storage[index].get_png_data(), null, false, FileCreateFlags.NONE, null);
             } catch(Error e) {
-                warning("Storing slide %u to cache in %s failed.\n", index, cache_file_name);
+                GLib.printerr("Storing slide %u to cache in %s failed.\n", index, cache_file_name);
+                Process.exit(1);
             }
         }
 

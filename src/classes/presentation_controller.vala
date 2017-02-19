@@ -172,7 +172,7 @@ namespace pdfpc {
         /**
          * Controllables which are registered with this presentation controller.
          */
-        protected GLib.List<Controllable> controllables;
+        protected Gee.List<Controllable> controllables;
 
         /**
          * The metadata of the presentation
@@ -246,7 +246,7 @@ namespace pdfpc {
             this.metadata.controller = this;
             this.black_on_end = allow_black_on_end;
 
-            this.controllables = new GLib.List<Controllable>();
+            this.controllables = new Gee.ArrayList<Controllable>();
 
             this.history = new Gee.ArrayQueue<int>();
 
@@ -279,7 +279,7 @@ namespace pdfpc {
                     "/org/freedesktop/ScreenSaver");
                 this.screensaver_cookie = this.screensaver.inhibit("pdfpc",
                     "Showing a presentation");
-                stdout.printf("Screensaver inhibited\n");
+                GLib.print("Screensaver inhibited\n");
             } catch (Error error) {
                 // pass
             }
@@ -449,7 +449,7 @@ namespace pdfpc {
             if (this.screensaver != null && this.screensaver_cookie != 0) {
                 try {
                     this.screensaver.un_inhibit(this.screensaver_cookie);
-                    stdout.printf("Screensaver reactivated\n");
+                    GLib.print("Screensaver reactivated\n");
                 } catch (Error error) {
                     // pass
                 }
@@ -561,10 +561,11 @@ namespace pdfpc {
          */
         public void bind(uint keycode, uint modMask, string action_name) {
             Action? action = this.action_group.lookup_action(action_name);
-            if (action != null)
+            if (action != null) {
                 this.keyBindings.set(new KeyDef(keycode, modMask), action);
-            else
-                warning("Unknown action %s", action_name);
+            } else {
+                GLib.printerr("Unknown action %s\n", action_name);
+            }
         }
 
         /**
@@ -586,10 +587,11 @@ namespace pdfpc {
          */
         public void bindMouse(uint button, uint modMask, string action_name) {
             Action? action = this.action_group.lookup_action(action_name);
-            if (action != null)
+            if (action != null) {
                 this.mouseBindings.set(new KeyDef(button, modMask), action);
-            else
-                warning("Unknown action %s", action_name);
+            } else {
+                GLib.printerr("Unknown action %s\n", action_name);
+            }
         }
 
         /**
@@ -728,14 +730,19 @@ namespace pdfpc {
         /**
          * A request to change the page has been issued
          */
-        public void page_change_request(int page_number) {
-            if (page_number != this.current_slide_number)
+        public void page_change_request(int page_number, bool start_timer = true) {
+            if (page_number != this.current_slide_number) {
                 this.push_history();
+            }
+
             this.current_slide_number = page_number;
             this.current_user_slide_number = this.metadata.real_slide_to_user_slide(
                 this.current_slide_number);
-            this.timer.start();
             this.controllables_update();
+
+            if (start_timer) {
+                this.timer.start();
+            }
         }
 
         /**
@@ -784,13 +791,13 @@ namespace pdfpc {
          * registered false is returned.
          */
         public bool register_controllable(Controllable controllable) {
-            if (this.controllables.find(controllable) != null) {
+            if (this.controllables.contains(controllable)) {
                 // The controllable has already been added.
                 return false;
             }
 
             //controllable.set_controller( this );
-            this.controllables.append(controllable);
+            this.controllables.add(controllable);
             if (this.main_view == null)
                 this.main_view = controllable.main_view;
 
@@ -1214,8 +1221,10 @@ namespace pdfpc {
          * controllable's main view.  Also, return the XID for the view's window,
          * useful for overlays.
          */
-        public uint* overlay_pos(int n, Poppler.Rectangle area, out Gdk.Rectangle rect) {
-            Controllable c = this.controllables.nth_data(n);
+        public uint* overlay_pos(int n, Poppler.Rectangle area, out Gdk.Rectangle rect, out int gdk_scale) {
+            Controllable c = (n < this.controllables.size) ? this.controllables.get(n) : null;
+            // default scale, and make the compiler happy
+            gdk_scale = 1;
             if (c == null) {
                 rect = Gdk.Rectangle();
                 return null;
@@ -1226,6 +1235,7 @@ namespace pdfpc {
                 return null;
             }
             rect = view.convert_poppler_rectangle_to_gdk_rectangle(area);
+            gdk_scale = view.scale_factor;
             return (uint*) ((Gdk.X11.Window) view.get_window()).get_xid();
         }
 #endif

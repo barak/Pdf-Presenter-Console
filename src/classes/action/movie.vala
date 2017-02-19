@@ -213,6 +213,7 @@ namespace pdfpc {
             Poppler.Annot annot = mapping.annot;
             string uri;
             bool temp = false;
+            bool noprogress = false;
             switch (annot.get_annot_type()) {
             case Poppler.AnnotType.SCREEN:
                 if (!("video" in annot.get_contents())) {
@@ -228,14 +229,14 @@ namespace pdfpc {
                     try {
                         fh = FileUtils.open_tmp("pdfpc-XXXXXX", out tmp_fn);
                     } catch (FileError e) {
-                        warning("Could not create temp file: %s", e.message);
+                        GLib.printerr("Could not create temp file: %s\n", e.message);
                         return null;
                     }
                     FileUtils.close(fh);
                     try {
                         movie.save(tmp_fn);
                     } catch (Error e) {
-                        warning("Could not save temp file: %s", e.message);
+                        GLib.printerr("Could not save temp file: %s\n", e.message);
                         return null;
                     }
                     uri = "file://" + tmp_fn;
@@ -243,7 +244,7 @@ namespace pdfpc {
                 } else {
                     string file = movie.get_filename();
                     if (file == null) {
-                        warning("Movie not embedded and has no file name");
+                        GLib.printerr("Movie not embedded and has no file name\n");
                         return null;
                     }
                     uri = filename_to_uri(file, controller.get_pdf_fname());
@@ -254,15 +255,16 @@ namespace pdfpc {
             case Poppler.AnnotType.MOVIE:
                 var movie = ((Poppler.AnnotMovie) annot).get_movie();
                 if (movie.need_poster()) {
-                    warning("Movie requests poster.  Not yet supported.");
+                    GLib.printerr("Movie requests poster. Not yet supported.\n");
                 }
                 string file = movie.get_filename();
                 if (file == null) {
-                    warning("Movie has no file name");
+                    GLib.printerr("Movie has no file name\n");
                     return null;
                 }
                 uri = filename_to_uri(file, controller.get_pdf_fname());
                 temp = false;
+                noprogress = !movie.show_controls();
                 break;
 
             default:
@@ -271,7 +273,7 @@ namespace pdfpc {
 
             Type type = Type.from_instance(this);
             ActionMapping new_obj = (ActionMapping) GLib.Object.new(type);
-            this.init_other(new_obj, mapping.area, controller, document, uri, false, false, false, false, 0, 0, temp);
+            this.init_other(new_obj, mapping.area, controller, document, uri, false, false, noprogress, false, 0, 0, temp);
             return new_obj;
         }
 
@@ -286,10 +288,12 @@ namespace pdfpc {
             Gdk.Rectangle rect;
             int n = 0;
             uint* xid;
+            int gdk_scale;
             while (true) {
-                xid = this.controller.overlay_pos(n, this.area, out rect);
-                if (xid == null)
+                xid = this.controller.overlay_pos(n, this.area, out rect, out gdk_scale);
+                if (xid == null) {
                     break;
+                }
                 Gst.Element sink = Gst.ElementFactory.make("xvimagesink", @"sink$n");
                 Gst.Element queue = Gst.ElementFactory.make("queue", @"queue$n");
                 bin.add_many(queue,sink);
@@ -301,7 +305,8 @@ namespace pdfpc {
                 Gst.Video.Overlay xoverlay = (Gst.Video.Overlay) sink;
                 xoverlay.set_window_handle(xid);
                 xoverlay.handle_events(false);
-                xoverlay.set_render_rectangle(rect.x, rect.y, rect.width, rect.height);
+                xoverlay.set_render_rectangle(rect.x*gdk_scale, rect.y*gdk_scale,
+                                              rect.width*gdk_scale, rect.height*gdk_scale);
                 n++;
             }
 
@@ -401,7 +406,7 @@ namespace pdfpc {
             GLib.Error err;
             string debug;
             message.parse_error(out err, out debug);
-            stderr.printf("Gstreamer error %s\n", err.message);
+            GLib.printerr("Gstreamer error %s\n", err.message);
         }
 
         /**
@@ -432,7 +437,7 @@ namespace pdfpc {
             this.stop();
             if (this.temp != "") {
                 if (FileUtils.unlink(this.temp) != 0) {
-                    warning("Problem deleting temp file %s", this.temp);
+                    GLib.printerr("Problem deleting temp file %s\n", this.temp);
                 }
             }
         }
@@ -525,10 +530,11 @@ namespace pdfpc {
                 Gst.Element filter = gst_element_make("capsfilter", "filter");
                 filter.set("caps", caps);
                 bin.add_many(adaptor1, adaptor2, overlay, scale, rate, filter);
-                if (!source.link_many(rate, scale, adaptor1, filter, overlay, adaptor2))
+                if (!source.link_many(rate, scale, adaptor1, filter, overlay, adaptor2)) {
                     throw new PipelineError.Linking("Could not link pipeline.");
+                }
             } catch (PipelineError err) {
-                warning(@"Error creating control pipeline: $(err.message)");
+                GLib.printerr("Error creating control pipeline: %s\n", err.message);
                 return source;
             }
 
@@ -573,10 +579,10 @@ namespace pdfpc {
                 if (this.loop) {
                     // attempting to seek from this callback fails, so we
                     // must schedule a seek on next idle time.
-                    GLib.Idle.add( () => {
+                    GLib.Idle.add(() => {
                         this.pipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH, this.starttime * Gst.SECOND);
                         return false;
-                    } );
+                    });
                 } else {
                     // Can't seek to beginning w/o updating output, so mark to seek later
                     this.eos = true;

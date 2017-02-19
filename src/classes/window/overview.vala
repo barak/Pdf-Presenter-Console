@@ -82,19 +82,13 @@ namespace pdfpc.Window {
          */
         protected Presenter presenter;
 
-        /*
-         * The aspect ratio of the first slide.  We assume all slides share the
-         * same aspect ratio.
-         */
-        protected double aspect_ratio;
-
-        /*
+        /**
          * The maximal size of the slides_view.
          */
         protected int max_width = -1;
         protected int max_height = -1;
 
-        /*
+        /**
          * The currently selected slide.
          */
         private int _current_slide = 0;
@@ -106,6 +100,11 @@ namespace pdfpc.Window {
                   this.slides_view.set_cursor(path, null, false);
                 }
         }
+
+        /**
+         * The used cell renderer, for later usage
+         */
+        private CellRendererHighlight renderer;
 
         /*
          * When the section changes, we need to update the current slide number.
@@ -129,12 +128,21 @@ namespace pdfpc.Window {
          * Constructor
          */
         public Overview( Metadata.Pdf metadata, PresentationController presentation_controller, Presenter presenter ) {
-            this.slides = new Gtk.ListStore(1, typeof(Gdk.Pixbuf));
+            this.get_style_context().add_class("overviewWindow");
+
+            this.slides = new Gtk.ListStore(1, typeof(int));
             this.slides_view = new Gtk.IconView.with_model(this.slides);
             this.slides_view.selection_mode = Gtk.SelectionMode.SINGLE;
-            var renderer = new CellRendererHighlight();
+            this.slides_view.halign = Gtk.Align.CENTER;
+            this.renderer = new CellRendererHighlight();
+            this.renderer.metadata = metadata;
+            Gtk.StyleContext style_context = this.get_style_context();
+            Pango.FontDescription font_description;
+            style_context.get(style_context.get_state(), "font", out font_description, null);
+            this.renderer.font_description = font_description;
+
             this.slides_view.pack_start(renderer, true);
-            this.slides_view.add_attribute(renderer, "pixbuf", 0);
+            this.slides_view.add_attribute(renderer, "slide_id", 0);
             this.slides_view.set_item_padding(0);
             this.slides_view.show();
             this.add(this.slides_view);
@@ -143,20 +151,19 @@ namespace pdfpc.Window {
             this.presentation_controller = presentation_controller;
             this.presenter = presenter;
 
-            this.slides_view.motion_notify_event.connect( this.presenter.on_mouse_move );
-            this.slides_view.motion_notify_event.connect( this.on_mouse_move );
-            this.slides_view.button_release_event.connect( this.on_mouse_release );
-            this.slides_view.key_press_event.connect( this.on_key_press );
-            this.slides_view.selection_changed.connect( this.on_selection_changed );
+            this.slides_view.motion_notify_event.connect(this.presenter.on_mouse_move);
+            this.slides_view.motion_notify_event.connect(this.on_mouse_move);
+            this.slides_view.button_release_event.connect(this.on_mouse_release);
+            this.slides_view.key_press_event.connect(this.on_key_press);
+            this.slides_view.selection_changed.connect(this.on_selection_changed);
             this.key_press_event.connect((event) => this.slides_view.key_press_event(event));
 
-            this.aspect_ratio = this.metadata.get_page_width() / this.metadata.get_page_height();
         }
 
         public void set_available_space(int width, int height) {
             this.max_width = width;
             this.max_height = height;
-            this.fill_structure();
+            this.prepare_layout();
         }
 
         /**
@@ -164,8 +171,9 @@ namespace pdfpc.Window {
          */
         public void ensure_focus() {
             Gtk.Window top = this.get_toplevel() as Gtk.Window;
-            if (top != null && !top.has_toplevel_focus)
+            if (top != null && !top.has_toplevel_focus) {
                 top.present();
+            }
             this.slides_view.grab_focus();
         }
 
@@ -173,17 +181,21 @@ namespace pdfpc.Window {
          * Recalculate the structure, if needed.
          */
         public void ensure_structure() {
-            if (this.n_slides != this.last_structure_n_slides)
-                this.fill_structure();
+            if (this.n_slides != this.last_structure_n_slides) {
+                this.prepare_layout();
+            }
         }
 
         /**
          * Figure out the sizes for the icons, and create entries in slides
          * for all the slides.
          */
-        protected void fill_structure() {
-            if (this.max_width == -1)
+        protected void prepare_layout() {
+            if (this.max_width == -1) {
                 return;
+            }
+
+            double aspect_ratio = this.metadata.get_page_width() / this.metadata.get_page_height();
 
             this.slides_view.set_margin(0);
 
@@ -210,10 +222,11 @@ namespace pdfpc.Window {
                 widthx = eff_max_width / cols - 2*padding - 2*col_spacing;
                 rows = (int)Math.ceil((float)this.n_slides / cols);
                 widthy = (int)Math.floor((eff_max_height / rows - 2*padding - 2*row_spacing)
-                                         * this.aspect_ratio);  // floor so that later round
-                                                                // doesn't increase height
-                if (widthy < Options.min_overview_width)
+                                         * aspect_ratio);  // floor so that later round
+                                                           // doesn't increase height
+                if (widthy < Options.min_overview_width) {
                     break;
+                }
 
                 min_width = widthx < widthy ? widthx : widthy;
                 if (min_width >= this.target_width) {  // If two layouts give the same width
@@ -229,71 +242,25 @@ namespace pdfpc.Window {
             } else {
                 this.slides_view.columns = tc;
             }
-            this.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
-            this.target_height = (int)Math.round(this.target_width / this.aspect_ratio);
+            this.set_policy(Gtk.PolicyType.ALWAYS, Gtk.PolicyType.ALWAYS);
+            this.target_height = (int)Math.round(this.target_width / aspect_ratio);
             rows = (int)Math.ceil((float)this.n_slides / this.slides_view.columns);
             int full_height = rows*(this.target_height + 2*padding + 2*row_spacing) + 2*margin;
-            if (full_height > this.max_height)
+            if (full_height > this.max_height) {
                 full_height = this.max_height;
-            this.set_size_request(-1, full_height);
+            }
 
             this.last_structure_n_slides = this.n_slides;
 
+            this.renderer.slide_width = this.target_width;
+            this.renderer.slide_height = this.target_height;
+
             this.slides.clear();
-            var pixbuf = new Gdk.Pixbuf(Gdk.Colorspace.RGB, true, 8, this.target_width,
-                this.target_height);
-            pixbuf.fill(0x7f7f7fff);
             var iter = Gtk.TreeIter();
-            for (int i=0; i<this.n_slides; i++) {
+            for (int i = 0; i < this.n_slides; i++) {
                 this.slides.append(out iter);
-                this.slides.set_value(iter, 0, pixbuf);
+                this.slides.set_value(iter, 0, i);
             }
-
-            this.fill_previews();
-        }
-
-        /**
-         * Fill the previews (only if we have a cache and we are displayed).
-         * The size of the icons should be known already
-         *
-         * This is done in a progressive way (one slide at a time) instead of
-         * all the slides in one go to provide some progress feedback to the
-         * user.
-         */
-        protected void fill_previews() {
-            if (this.idle_id != 0)
-                Source.remove(idle_id);
-            this.next_undone_preview = 0;
-            this.idle_id = GLib.Idle.add(() => {
-                if (!this._fill_previews()) {
-                    this.idle_id = 0;
-                    return false;
-                }
-                return true;
-            });
-        }
-
-        protected bool _fill_previews() {
-            if (this.cache == null || this.next_undone_preview >= this.n_slides)
-                return false;
-
-            // We get the dimensions from the first button and first slide,
-            // should be the same for all
-            int surface_width, surface_height;
-            var firstSlide = this.cache.retrieve(0);
-            surface_width = firstSlide.get_width();
-            surface_height = firstSlide.get_height();
-
-            var slideToFill = this.cache.retrieve(metadata.user_slide_to_real_slide(this.next_undone_preview));
-            Gdk.Pixbuf pixbuf = Gdk.pixbuf_get_from_surface(slideToFill, 0, 0, surface_width, surface_height);
-            var pixbuf_scaled = pixbuf.scale_simple(this.target_width, this.target_height,
-                                                    Gdk.InterpType.BILINEAR);
-
-            var iter = Gtk.TreeIter();
-            this.slides.get_iter_from_string(out iter, @"$(this.next_undone_preview)");
-            this.slides.set_value(iter, 0, pixbuf_scaled);
-
-            return (++this.next_undone_preview < this.n_slides);
         }
 
         /**
@@ -302,7 +269,9 @@ namespace pdfpc.Window {
          */
         public void set_cache(Renderer.Cache.Base cache) {
             this.cache = cache;
-            this.fill_previews();
+            this.renderer.cache = cache;
+            // force redraw if the cache is there
+            this.slides_view.queue_draw();
         }
 
         /**
@@ -310,12 +279,13 @@ namespace pdfpc.Window {
          * triggers a rebuilding of the widget.
          */
         public void set_n_slides(int n) {
-            if ( n != this.n_slides ) {
+            if (n != this.n_slides) {
                 var currently_selected = this.current_slide;
                 this.n_slides = n;
-                this.fill_structure();
-                if ( currently_selected >= this.n_slides )
+                this.prepare_layout();
+                if (currently_selected >= this.n_slides) {
                     currently_selected = this.n_slides - 1;
+                }
                 this.current_slide = currently_selected;
             }
         }
@@ -330,8 +300,9 @@ namespace pdfpc.Window {
             var iter = Gtk.TreeIter();
             this.slides.get_iter_from_string(out iter, @"$(this.current_slide)");
             this.slides.remove(iter);
-            if (this.current_slide >= this.n_slides)
+            if (this.current_slide >= this.n_slides) {
                 this.current_slide = this.n_slides - 1;
+            }
         }
 
         /**
@@ -341,17 +312,19 @@ namespace pdfpc.Window {
          */
         public bool on_key_press(Gtk.Widget source, Gdk.EventKey key) {
             bool handled = false;
-            switch ( key.keyval ) {
+            switch (key.keyval) {
                 case 0xff51: /* Cursor left */
                 case 0xff55: /* Page Up */
-                    if ( this.current_slide > 0)
+                    if (this.current_slide > 0) {
                         this.current_slide -= 1;
+                    }
                     handled = true;
                     break;
                 case 0xff53: /* Cursor right */
                 case 0xff56: /* Page down */
-                    if ( this.current_slide < this.n_slides - 1 )
+                    if (this.current_slide < this.n_slides - 1) {
                         this.current_slide += 1;
+                    }
                     handled = true;
                     break;
                 case 0xff0d: /* Return */
@@ -370,8 +343,9 @@ namespace pdfpc.Window {
         public bool on_mouse_move(Gtk.Widget source, Gdk.EventMotion event) {
             Gtk.TreePath path;
             path = this.slides_view.get_path_at_pos((int)event.x, (int)event.y);
-            if (path != null && path.get_indices()[0] != this.current_slide)
+            if (path != null && path.get_indices()[0] != this.current_slide) {
                 this.current_slide = path.get_indices()[0];
+            }
             return false;
         }
 
@@ -390,19 +364,67 @@ namespace pdfpc.Window {
     }
 
     /*
-     * Render a pixbuf that is slightly shaded, unless it is the selected one.
+     * Render a surface that is slightly shaded, unless it is the selected one.
      */
-    public class CellRendererHighlight: Gtk.CellRendererPixbuf {
+    class CellRendererHighlight : Gtk.CellRenderer {
+        public int slide_id { get; set; }
+
+        public Renderer.Cache.Base? cache { get; set; }
+        public Pango.FontDescription font_description { get; set; }
+        public Metadata.Pdf metadata { get; set; }
+        public int slide_width { get; set; }
+        public int slide_height { get; set; }
+
+        public override void get_size(Gtk.Widget widget, Gdk.Rectangle? cell_area,
+                                      out int x_offset, out int y_offset,
+                                      out int width, out int height) {
+            x_offset = 0;
+            y_offset = 0;
+            width = this.slide_width;
+            height = this.slide_height;
+        }
 
         public override void render(Cairo.Context cr, Gtk.Widget widget,
                                     Gdk.Rectangle background_area, Gdk.Rectangle cell_area,
                                     Gtk.CellRendererState flags) {
-            base.render(cr, widget, background_area, cell_area, flags);
+            // nothing to show
+            if (cache == null) {
+                cr.set_source_rgba(0.5, 0.5, 0.5, 1);
+                cr.rectangle(cell_area.x, cell_area.y, cell_area.width, cell_area.height);
+                cr.fill();
+            } else {
+                var slide_to_fill = this.cache.retrieve(metadata.user_slide_to_real_slide(this.slide_id));
+                double scale_factor = (double)slide_width/slide_to_fill.get_width();
+                cr.scale(scale_factor, scale_factor);
+                cr.set_source_surface(slide_to_fill, (double)cell_area.x/scale_factor, (double)cell_area.y/scale_factor);
+                cr.paint();
+                cr.scale(1.0/scale_factor, 1.0/scale_factor);
+            }
+
             if ((flags & Gtk.CellRendererState.SELECTED) == 0) {
-                Gdk.cairo_rectangle(cr, cell_area);
-                cr.set_source_rgba(0,0,0,0.2);
+                cr.rectangle(cell_area.x, cell_area.y, cell_area.width, cell_area.height);
+                cr.set_source_rgba(0, 0, 0, 0.4);
                 cr.fill();
             }
+
+            // draw slide number
+            var layout = Pango.cairo_create_layout(cr);
+            layout.set_font_description(this.font_description);
+            layout.set_text(@"$(slide_id + 1)", -1);
+            layout.set_width(cell_area.width);
+            layout.set_alignment(Pango.Alignment.CENTER);
+
+            Pango.Rectangle logical_extent;
+            layout.get_pixel_extents(null, out logical_extent);
+            cr.move_to(cell_area.x + (cell_area.width / 2), cell_area.y + (cell_area.height / 2) - (logical_extent.height / 2));
+
+            if ((flags & Gtk.CellRendererState.SELECTED) == 0) {
+                cr.set_source_rgba(0.7, 0.7, 0.7, 0.7);
+            } else {
+                cr.set_source_rgba(0.7, 0.7, 0.7, 0.2);
+            }
+
+            Pango.cairo_show_layout(cr, layout);
         }
     }
 }

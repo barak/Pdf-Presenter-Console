@@ -4,6 +4,11 @@
     border: none;
     color: white;
     font-family: Verdana;
+    /* This will be deprecated in GTK 3.20,
+     * but the alternative of Widget's min-width
+     * does not work prior to 3.20
+     */
+    -GtkProgressBar-min-horizontal-bar-width: 1px;
 }
 
 scrolledwindow trough * {
@@ -39,15 +44,18 @@ GtkProgressBar * {
     }
  */
 
-pdfpcTimerLabel.pretalk {
+.pretalk {
     color: green;
 }
 
-pdfpcTimerLabel.last-minutes {
+.last-minutes {
     color: orange;
 }
 
-pdfpcTimerLabel.overtime {
+.overtime {
     color: red;
 }
 
+.overviewWindow {
+    font-size: 4em;
+}

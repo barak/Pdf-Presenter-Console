@@ -125,8 +125,50 @@ namespace pdfpc.Metadata {
                     string section_content =  config_sections[i + 1].strip();
 
                     switch (section_type) {
+                        case "[duration]": {
+                            // if duration was set via command line
+                            // ignore pdfpc file
+                            if (Options.duration == uint.MAX) {
+                                this.duration = int.parse(section_content);
+                            }
+                            break;
+                        }
+                        case "[end_time]": {
+                            // command line first
+                            if (Options.end_time == null) {
+                                Options.end_time = section_content;
+                            }
+                            break;
+                        }
+                        case "[end_user_slide]": {
+                            this.end_user_slide = int.parse(section_content);
+                            break;
+                        }
                         case "[file]": {
                             this.pdf_fname = section_content;
+                            break;
+                        }
+                        case "[font_size]": {
+                            this.font_size = int.parse(section_content);
+                            break;
+                        }
+                        case "[last_minutes]": {
+                            // command line first
+                            // 5 is the default value
+                            if (Options.last_minutes != 5) {
+                                Options.last_minutes = int.parse(section_content);
+                            }
+                            break;
+                        }
+                        case "[notes]": {
+                            notes.parse_lines(section_content.split("\n"));
+                            break;
+                        }
+                        case "[notes_position]": {
+                            // command line first
+                            if (Options.notes_position == null) {
+                                this.notes_position = NotesPosition.from_string(section_content);
+                            }
                             break;
                         }
                         case "[skip]": {
@@ -134,20 +176,11 @@ namespace pdfpc.Metadata {
                             skips_by_user = true;
                             break;
                         }
-                        case "[duration]": {
-                            this.duration = int.parse(section_content);
-                            break;
-                        }
-                        case "[end_user_slide]": {
-                            this.end_user_slide = int.parse(section_content);
-                            break;
-                        }
-                        case "[notes]": {
-                            notes.parse_lines(section_content.split("\n"));
-                            break;
-                        }
-                        case "[font_size]": {
-                            this.font_size = int.parse(section_content);
+                        case "[start_time]": {
+                            // command line first
+                            if (Options.start_time == null) {
+                                Options.start_time = section_content;
+                            }
                             break;
                         }
                         default: {
@@ -157,7 +190,8 @@ namespace pdfpc.Metadata {
                     }
                 }
             } catch (Error e) {
-                error("%s", e.message);
+                GLib.printerr("%s\n", e.message);
+                Process.exit(1);
             }
         }
 
@@ -207,8 +241,9 @@ namespace pdfpc.Metadata {
          */
         public void quit() {
             this.save_to_disk();
-            foreach (var mapping in this.action_mapping)
+            foreach (var mapping in this.action_mapping) {
                 mapping.deactivate();
+            }
         }
 
         /**
@@ -216,7 +251,7 @@ namespace pdfpc.Metadata {
          * with the notes or the skips)
          */
         public void save_to_disk() {
-            string contents =   format_duration()
+            string contents =   format_command_line_options()
                               + format_skips()
                               + format_end_user_slide()
                               + format_font_size()
@@ -227,7 +262,8 @@ namespace pdfpc.Metadata {
                     GLib.FileUtils.set_contents(this.pdfpc_fname, contents);
                 }
             } catch (Error e) {
-                error("%s", e.message);
+                GLib.printerr("Failed to store metadata on disk: %s\nThe metadata was:\n\n%s", e.message, contents);
+                Process.exit(1);
             }
         }
 
@@ -282,10 +318,22 @@ namespace pdfpc.Metadata {
             return contents;
         }
 
-        protected string format_duration() {
+        protected string format_command_line_options() {
             string contents = "";
-            if (this.duration > 0) {
+            if (this.duration != uint.MAX) {
                 contents += "[duration]\n%u\n".printf(duration);
+            }
+            if (Options.end_time != null) {
+                contents += "[end_time]\n%s\n".printf(Options.end_time);
+            }
+            if (this.notes_position != NotesPosition.NONE) {
+                contents += "[notes_position]\n%s\n".printf(this.notes_position.to_string());
+            }
+            if (Options.last_minutes != 5) {
+                contents += "[last_minutes]\n%u\n".printf(Options.last_minutes);
+            }
+            if (Options.start_time != null) {
+                contents += "[start_time]\n%s\n".printf(Options.start_time);
             }
 
             return contents;
@@ -312,10 +360,14 @@ namespace pdfpc.Metadata {
         /**
          * Base constructor taking the file url to the pdf file
          */
-        public Pdf(string fname, NotesPosition notes_position) {
+        public Pdf(string fname) {
             this.url = File.new_for_commandline_arg(fname).get_uri();
 
-            this.notes_position = notes_position;
+            this.action_mapping = new Gee.ArrayList<ActionMapping>();
+
+            this.notes_position = NotesPosition.from_string(Options.notes_position);
+
+            this.duration = Options.duration;
 
             fill_path_info(fname);
             notes = new slides_notes();
@@ -600,7 +652,7 @@ namespace pdfpc.Metadata {
             } catch(GLib.Error e) {
                 GLib.printerr("Unable to open pdf file \"%s\": %s\n",
                               fname, e.message);
-                Posix.exit(1);
+                Process.exit(1);
             }
 
             return document;
@@ -611,7 +663,7 @@ namespace pdfpc.Metadata {
          * page.
          */
         private int mapping_page_num = -1;
-        private GLib.List<ActionMapping> action_mapping;
+        private Gee.List<ActionMapping> action_mapping;
         private ActionMapping[] blanks = {
 #if MOVIES
             new ControlledMovie(),
@@ -626,12 +678,12 @@ namespace pdfpc.Metadata {
          * destroy the existing action mappings and create new mappings for
          * the new page.
          */
-        public unowned GLib.List<ActionMapping> get_action_mapping(int page_num) {
+        public unowned Gee.List<ActionMapping> get_action_mapping(int page_num) {
             if (page_num != this.mapping_page_num) {
                 foreach (var mapping in this.action_mapping) {
                     mapping.deactivate();
                 }
-                this.action_mapping = null; //.Is this really the correct way to clear a list?
+                this.action_mapping.clear();
 
                 GLib.List<Poppler.LinkMapping> link_mappings;
                 link_mappings = this.get_document().get_page(page_num).get_link_mapping();
@@ -639,7 +691,7 @@ namespace pdfpc.Metadata {
                     foreach (var blank in blanks) {
                         var action = blank.new_from_link_mapping(mapping, this.controller, this.document);
                         if (action != null) {
-                            this.action_mapping.append(action);
+                            this.action_mapping.add(action);
                             break;
                         }
                     }
@@ -653,7 +705,7 @@ namespace pdfpc.Metadata {
                     foreach (var blank in blanks) {
                         var action = blank.new_from_annot_mapping(mapping, this.controller, this.document);
                         if (action != null) {
-                            this.action_mapping.append(action);
+                            this.action_mapping.add(action);
                             break;
                         }
                     }
@@ -702,6 +754,23 @@ namespace pdfpc.Metadata {
                     return BOTTOM;
                 default:
                     return NONE;
+            }
+        }
+
+        public string to_string() {
+            switch (this) {
+                case NONE:
+                    return "NONE";
+                case TOP:
+                    return "TOP";
+                case BOTTOM:
+                    return "BOTTOM";
+                case RIGHT:
+                    return "RIGHT";
+                case LEFT:
+                    return "LEFT";
+                default:
+                    assert_not_reached();
             }
         }
     }

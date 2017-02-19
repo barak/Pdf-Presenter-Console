@@ -3,8 +3,9 @@ pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
 pkg_check_modules(GIO REQUIRED gio-2.0)
 pkg_check_modules(GEE REQUIRED gee-0.8)
 pkg_check_modules(POPPLER REQUIRED poppler-glib)
-pkg_check_modules(GTK REQUIRED gtk+-3.0)
+pkg_check_modules(GTK REQUIRED gtk+-3.0>=3.10)
 pkg_check_modules(GTHREAD REQUIRED gthread-2.0)
+pkg_check_modules(PANGOCAIRO REQUIRED pangocairo)
 if (MOVIES)
     pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
     pkg_check_modules(GSTBASE REQUIRED gstreamer-base-1.0)
@@ -20,6 +21,11 @@ if (MOVIES)
     )
 endif ()
 
+if ("${GTK_VERSION}" LESS 3.18)
+    message(WARNING "Using legacy GTK API")
+    set(EXTRA_VALA_OPTIONS ${EXTRA_VALA_OPTIONS} -D GTK_LEGACY)
+endif ()
+
 set(CFLAGS
     ${GOBJECT_CFLAGS} ${GOBJECT_CFLAGS_OTHER}
     ${GIO_CFLAGS} ${GIO_CFLAGS_OTHER}
@@ -27,6 +33,7 @@ set(CFLAGS
     ${POPPLER_CFLAGS} ${POPPLER_CFLAGS_OTHER}
     ${GTK_CFLAGS} ${GTK_CFLAGS_OTHER}
     ${GTHREAD_CFLAGS} ${GTHREAD_CFLAGS_OTHER}
+    ${PANGOCAIRO_CFLAGS} ${PANGOCAIRO_CFLAGS_OTHER}
     ${GSTREAMER_CFLAGS} ${GSTREAMER_CFLAGS_OTHER}
     ${GSTINTERFACES_CFLAGS} ${GSTINTERFACES_CFLAGS_OTHER}
     ${GSTVIDEO_CFLAGS} ${GSTVIDEO_CFLAGS_OTHER}
@@ -41,6 +48,7 @@ set(LIBS
     ${POPPLER_LIBRARIES}
     ${GTK_LIBRARIES}
     ${GTHREAD_LIBRARIES}
+    ${PANGOCAIRO_LIBRARIES}
     ${GSTREAMER_LIBRARIES}
     ${GSTINTERFACES_LIBRARIES}
     ${GSTVIDEO_LIBRARIES}
@@ -55,6 +63,7 @@ set(LIB_PATHS
     ${POPPLER_LIBRARY_DIRS}
     ${GTK_LIBRARY_DIRS}
     ${GTHREAD_LIBRARY_DIRS}
+    ${PANGOCAIRO_LIBRARY_DIRS}
     ${GSTREAMER_LIBRARY_DIRS}
     ${GSTINTERFACES_LIBRARY_DIRS}
     ${GSTVIDEO_LIBRARY_DIRS}
@@ -78,6 +87,7 @@ PACKAGES
     gee-0.8
     poppler-glib
     gtk+-3.0
+    pangocairo
     posix
     ${MOVIE_PACKAGES}
 OPTIONS
