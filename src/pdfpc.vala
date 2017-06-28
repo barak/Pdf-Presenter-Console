@@ -102,7 +102,7 @@ namespace pdfpc {
          * Print version string and copyright statement
          */
         private void print_version() {
-            GLib.print("pdfpc v4.0.6\n"
+            GLib.print("pdfpc v4.0.7\n"
                      + "(C) 2015-2017 Robert Schroll, Andreas Bilke, Andy Barry, Phillip Berndt and others\n"
                      + "(C) 2012 David Vilar\n"
                      + "(C) 2009-2011 Jakob Westhoff\n\n"
@@ -177,6 +177,9 @@ namespace pdfpc {
          * initializes the Gtk system.
          */
         public void run(string[] args) {
+#if X11
+            X.init_threads();
+#endif
             Gtk.init(ref args);
 
             string pdfFilename = this.parse_command_line_options(ref args);

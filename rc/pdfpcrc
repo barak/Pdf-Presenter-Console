@@ -12,6 +12,7 @@ bind S+Return  next10
 bind S+Right   next10
 bind S+space   next10
 bind S+Down    next10
+bind k         nextUnseen
 
 # Back movement
 bind Left      prev
@@ -20,6 +21,7 @@ bind Up        prevOverlay
 bind S+Left    prev10
 bind S+Prior   prev10
 bind S+Up      prev10
+bind j         prevSeen
 
 # "Jumps"
 bind Home      gotoFirst
@@ -47,6 +49,8 @@ bind f         freeze
 bind n         note
 bind o         overlay
 bind e         endSlide
+bind S+s       lastSlide
+bind S+r       jumpLastSlide
 
 # Font scaling
 bind plus      increaseFontSize
