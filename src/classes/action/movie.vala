@@ -265,6 +265,9 @@ namespace pdfpc {
                 uri = filename_to_uri(file, controller.get_pdf_fname());
                 temp = false;
                 noprogress = !movie.show_controls();
+                #if NEW_POPPLER
+                loop = movie.get_play_mode() == Poppler.MoviePlayMode.REPEAT;
+                #endif
                 break;
 
             default:
@@ -295,28 +298,45 @@ namespace pdfpc {
                     break;
                 }
                 Gst.Element sink;
-                // if the gstreamer OpenGL sink is installed (in gstreamer-plugins-bad), use it
-                // as it fixes video issues (cf pdfpc/pdfpc#197). Otherwise, fallback on
-                // default xvimagesink.
-                Gst.ElementFactory glimagesinkFactory = Gst.ElementFactory.find("glimagesink");
-                if(glimagesinkFactory != null) {
-                    sink = glimagesinkFactory.create(@"sink$n");
-                } else {
-                    GLib.printerr("gstreamer's OpenGL plugin glimagesink not available. Using xvimagesink instead.\n");
-                    sink = Gst.ElementFactory.make("xvimagesink", @"sink$n");
+
+                switch(Options.gstreamer_pipeline) {
+                    case Options.GstreamerPipeline.XVIMAGESINK:
+                        sink = Gst.ElementFactory.make("xvimagesink", @"sink$n");
+                        break;
+                    case Options.GstreamerPipeline.GLIMAGESINK:
+                        sink = Gst.ElementFactory.make("glimagesink", @"sink$n");
+                        break;
+                    default:
+                        GLib.printerr("Invalid gstreamer-pipeline selected. Falling back to autovideosink.\n");
+                        sink = Gst.ElementFactory.make("autovideosink", @"sink$n");
+                        break;
                 }
+
                 Gst.Element queue = Gst.ElementFactory.make("queue", @"queue$n");
                 bin.add_many(queue,sink);
                 tee.link(queue);
                 Gst.Element ad_element = this.link_additional(n, queue, bin, rect);
                 ad_element.link(sink);
                 sink.set("force_aspect_ratio", false);
-
                 Gst.Video.Overlay xoverlay = (Gst.Video.Overlay) sink;
-                xoverlay.set_window_handle(xid);
+
+                if(Options.gstreamer_pipeline == Options.GstreamerPipeline.GLIMAGESINK) {
+                    var overlay_widget = this.controller.overlay_widget(n, this.area);
+                    if (overlay_widget.get_realized()) {
+                        xoverlay.set_window_handle((uint*)((Gdk.X11.Window) overlay_widget.get_window()).get_xid());
+                    }
+                    else {
+                        overlay_widget.realize.connect((event) => {
+                            xoverlay.set_window_handle((uint*)((Gdk.X11.Window) overlay_widget.get_window()).get_xid());
+                        });
+                    }
+                }
+                else if(Options.gstreamer_pipeline == Options.GstreamerPipeline.XVIMAGESINK) {
+                    xoverlay.set_window_handle(xid);
+                    xoverlay.set_render_rectangle(rect.x*gdk_scale, rect.y*gdk_scale,
+                                                  rect.width*gdk_scale, rect.height*gdk_scale);
+                }
                 xoverlay.handle_events(false);
-                xoverlay.set_render_rectangle(rect.x*gdk_scale, rect.y*gdk_scale,
-                                              rect.width*gdk_scale, rect.height*gdk_scale);
                 n++;
             }
 
