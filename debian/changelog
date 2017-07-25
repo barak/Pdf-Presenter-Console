@@ -1,3 +1,9 @@
+pdf-presenter-console (4.0.7-2) unstable; urgency=medium
+
+  * Merge upstream fixes, should address various video bugs
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 25 Jul 2017 11:52:59 +0100
+
 pdf-presenter-console (4.0.7-1) unstable; urgency=medium
 
   * New upstream release
