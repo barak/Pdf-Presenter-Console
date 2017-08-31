@@ -26,7 +26,11 @@ Installation
 - On Fedora::
 
         sudo dnf install pdfpc
-        
+
+- On archlinux::
+
+        sudo pacman -S pdfpc
+
 - On Windows 10 (with *Windows Subsystem for Linux (WSL)*)::
 
         Install:
@@ -40,8 +44,6 @@ Installation
         3. Windows: Start the X-Server with: 'vcxsrv -nodecoration -screen 0 @1 -screen 1 @2 +xinerama'
         4. Windows: Open CMD and run: 'bash' in order to start the WSL-bash
         5. WSL-Bash: run: 'DISPLAY=:0 pdfpc <your PDF file>' to open your presentation with pdfpc
-       
-- `Compiling from source <#compile-and-install>`_
 
 Sample presentations
 --------------------
