@@ -25,6 +25,10 @@
  */
 
 namespace pdfpc {
+    public errordomain ConfigFileError {
+        INVALID_BIND
+    }
+
     class ConfigFileReader {
         public ConfigFileReader() { }
 
@@ -67,7 +71,7 @@ namespace pdfpc {
         }
 
         private void bindKey(string wholeLine, string[] fields) {
-            if (fields.length != 3) {
+            if (fields.length != 3 && fields.length != 4) {
                 GLib.printerr("Bad key specification: %s\n", wholeLine);
                 return;
             }
@@ -77,12 +81,19 @@ namespace pdfpc {
             if (keycode == 0x0) {
                 GLib.printerr("Warning: Unknown key: %s\n", fields[1]);
             } else {
-                Options.BindTuple bt = new Options.BindTuple();
-                bt.type = "bind";
-                bt.keyCode = keycode;
-                bt.modMask = modMask;
-                bt.actionName = fields[2];
-                Options.key_bindings.add(bt);
+                try {
+                    Options.BindTuple bt = new Options.BindTuple();
+                    bt.type = "bind";
+                    bt.keyCode = keycode;
+                    bt.modMask = modMask;
+                    bt.actionName = fields[2];
+                    if (fields.length > 3) {
+                        bt.setActionArg(fields[3]);
+                    }
+                    Options.key_bindings.add(bt);
+                } catch (ConfigFileError e) {
+                    GLib.printerr("Line '%s' contains errors. Reason: %s\n", wholeLine, e.message);
+                }
             }
         }
 
@@ -112,7 +123,7 @@ namespace pdfpc {
         }
 
         private void bindMouse(string wholeLine, string[] fields) {
-            if (fields.length != 3) {
+            if (fields.length != 3 && fields.length != 4) {
                 GLib.printerr("Bad mouse specification: %s\n", wholeLine);
                 return;
             }
@@ -122,12 +133,19 @@ namespace pdfpc {
             if (button == 0x0) {
                 GLib.printerr("Warning: Unknown button: %s\n", fields[1]);
             } else {
-                Options.BindTuple bt = new Options.BindTuple();
-                bt.type = "bind";
-                bt.keyCode = button;
-                bt.modMask = modMask;
-                bt.actionName = fields[2];
-                Options.mouse_bindings.add(bt);
+                try {
+                    Options.BindTuple bt = new Options.BindTuple();
+                    bt.type = "bind";
+                    bt.keyCode = button;
+                    bt.modMask = modMask;
+                    bt.actionName = fields[2];
+                    if (fields.length > 3) {
+                        bt.setActionArg(fields[3]);
+                    }
+                    Options.mouse_bindings.add(bt);
+                } catch (ConfigFileError e) {
+                    GLib.printerr("Line '%s' contains errors. Reason: %s\n", wholeLine, e.message);
+                }
             }
         }
 
@@ -251,19 +269,6 @@ namespace pdfpc {
                     // pushing false makes no sense
                     if (use_time_of_day) {
                         Options.use_time_of_day = true;
-                    }
-                    break;
-                case "gstreamer-pipeline":
-                    switch(fields[2]) {
-                        case "xvimagesink":
-                            Options.gstreamer_pipeline = Options.GstreamerPipeline.XVIMAGESINK;
-                            break;
-                        case "glimagesink":
-                            Options.gstreamer_pipeline = Options.GstreamerPipeline.GLIMAGESINK;
-                            break;
-                        default:
-                            GLib.printerr("Invalid value for option gstreamer-pipeline, only xvimagesink and glimagesink are supported\n");
-                            break;
                     }
                     break;
                 default:

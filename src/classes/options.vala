@@ -157,21 +157,26 @@ namespace pdfpc {
          */
         public static bool version = false;
 
-        public enum GstreamerPipeline {
-            XVIMAGESINK,
-            GLIMAGESINK,
-        }
-
-        /**
-         * Select the gstreamer pipeline to use for video output
-         */
-        public static GstreamerPipeline gstreamer_pipeline = GstreamerPipeline.XVIMAGESINK;
-
         public class BindTuple {
             public string type;
             public uint keyCode;
             public uint modMask;
             public string actionName;
+
+            private string? _actionArg;
+            public string? actionArg {
+                get {
+                    return _actionArg;
+                }
+            }
+
+            public void setActionArg(string? actionArg) throws ConfigFileError {
+                if (this.actionName != "setPenColor") {
+                    throw new ConfigFileError.INVALID_BIND("Only 'setPenColor' accepts an action argument");
+                }
+
+                this._actionArg = actionArg;
+            }
         }
 
         /**

@@ -26,7 +26,21 @@ Installation
 - On Fedora::
 
         sudo dnf install pdfpc
+        
+- On Windows 10 (with *Windows Subsystem for Linux (WSL)*)::
 
+        Install:
+        1. Windows: Activate WSL: https://msdn.microsoft.com/en-us/commandline/wsl/install_guide
+        2. Windows: Open CMD and run: 'bash' in order to start the WSL-bash
+        3. WSL-Bash: run: 'sudo apt-get install pdf-presenter-console'
+        
+        Run:
+        1. Windows: Install a Windows X-Server like VcXsrv: https://sourceforge.net/projects/vcxsrv
+        2. Windows: Make the presentation screen your secondary screen and disable the taskbar on that screen
+        3. Windows: Start the X-Server with: 'vcxsrv -nodecoration -screen 0 @1 -screen 1 @2 +xinerama'
+        4. Windows: Open CMD and run: 'bash' in order to start the WSL-bash
+        5. WSL-Bash: run: 'DISPLAY=:0 pdfpc <your PDF file>' to open your presentation with pdfpc
+       
 - `Compiling from source <#compile-and-install>`_
 
 Sample presentations
@@ -59,7 +73,7 @@ requirements need to be met:
 
 On Ubuntu systems, you can install these dependencies with::
 
-    sudo apt-get install cmake valac libgee-0.8-dev libpoppler-glib-dev libgtk-3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+    sudo apt-get install cmake valac libgee-0.8-dev libpoppler-glib-dev libgtk-3-dev libgstreamer1.0-dev libgstreamer-plugins-bad1.0-dev
 
 and you should consider installing all the available gstreamer codecs::
 
@@ -106,7 +120,6 @@ can be removed by compiling without support for movie playback by passing
 Compiling on Windows
 --------------------
 
-On issue #106 there is a short tutorial on how to compile pdfpc on Windows.
 First a cygwin installation with the following dependencies is needed:
 
 - cmake
@@ -163,18 +176,12 @@ FAQ
 Embedded video playback is not working.
 ---------------------------------------
 
-You likely have a ``gstreamer`` codec issue.  First, try to install
-``gstreamer``'s 'bad' codecs (package ``libgstreamer-plugins-bad1.0-0`` on
-Debian/Ubuntu) and add ``option gstreamer-pipeline glimagesink`` to your
-``pdfpcrc`` file.  By doing so, ``pdfpc`` will use ``gstreamer``'s OpenGL
-backend for rendering, which might solve your issue.
-
-If the problem persists, try loading the video file you want to play with the
-following command: ``gst-launch-1.0 filesrc location=<your video> ! decodebin !
-autovideosink``  If the video plays, go ahead and `submit an issue
-<https://github.com/pdfpc/pdfpc/issues>`_.  Otherwise, the command will likely
-output some good hints for why gstreamer cannot decode the video.
-
+You likely have a ``gstreamer`` codec issue. Try loading the video file you
+want to play with the following command: ``gst-launch-1.0 filesrc
+location=<your video> ! decodebin !  autovideosink``  If the video plays, go
+ahead and `submit an issue <https://github.com/pdfpc/pdfpc/issues>`_.
+Otherwise, the command will likely output some good hints for why gstreamer
+cannot decode the video.
 
 Windows do not appear on the correct screen.
 ---------------------------------------------------
