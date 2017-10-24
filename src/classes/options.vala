@@ -65,6 +65,10 @@ namespace pdfpc {
         public static bool disable_cache_compression = false;
 
         /**
+         * Config option to disable scrolling events on the presenter window.
+         */
+        public static bool disable_scrolling = false;
+        /**
          * Commandline option to persist the PNG cache to disk.
          */
         public static bool persist_cache = false;
@@ -123,6 +127,12 @@ namespace pdfpc {
         public static bool use_time_of_day = false;
 
         /**
+         * Use the new coloring mode of the timer according to the actual
+         * progress
+         */
+        public static bool timer_pace_color = true;
+
+        /**
          * Time the talk should end
          */
         public static string? end_time = null;
@@ -156,6 +166,11 @@ namespace pdfpc {
          * Flag if the version string should be printed on startup
          */
         public static bool version = false;
+
+        /**
+         * Location of specific, user-chosen pdfpcrc file
+         */
+        public static string? pdfpc_location = null;
 
         public class BindTuple {
             public string type;

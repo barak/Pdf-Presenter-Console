@@ -12,6 +12,7 @@
  * Copyright 2015,2017 Andreas Bilke
  * Copyright 2015 Andy Barry
  * Copyright 2017 Olivier Pantalé
+ * Copyright 2017 Philipp Berndt
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,6 +54,11 @@ namespace pdfpc {
          * Stores if the view is faded to black
          */
         public bool faded_to_black { get; protected set; default = false; }
+
+        /**
+         * Stores if the view is hidden
+         */
+        public bool hidden { get; protected set; default = false; }
 
         /**
          * Stores if the view is frozen
@@ -268,21 +274,13 @@ namespace pdfpc {
             this.history = new Gee.ArrayQueue<int>();
             this.user_slide_progress = new int[metadata.get_user_slide_count()];
 
-            // Calculate the countdown to display until the presentation has to
-            // start
-            time_t start_time = 0;
-            if (Options.start_time != null) {
-                start_time = this.parseTime(Options.start_time);
-            }
-            // The same again for end_time
-            time_t end_time = 0;
+            // If end_time is set, reset duration to 0
             if (Options.end_time != null) {
-                end_time = this.parseTime(Options.end_time);
                 Options.duration = 0;
                 this.metadata.set_duration(0);
             }
-            this.timer = getTimerLabel((int) this.metadata.get_duration() * 60,
-                end_time, Options.last_minutes, start_time, Options.use_time_of_day);
+            this.timer = getTimerLabel(this,
+                (int) this.metadata.get_duration() * 60);
             this.timer.reset();
 
             this.n_slides = (int) this.metadata.get_slide_count();
@@ -292,25 +290,21 @@ namespace pdfpc {
 
             this.add_actions();
 
-            try {
-                Bus.get_proxy.begin<ScreenSaver>(BusType.SESSION, "org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver", 0, null, (obj, res) => {
-                    try {
-                        this.screensaver = Bus.get_proxy.end(res);
-                        this.screensaver.inhibit.begin("pdfpc", "Showing a presentation", (obj, res) => {
-                            try {
-                                this.screensaver_cookie = this.screensaver.inhibit.end(res);
-                                GLib.print("Screensaver inhibited\n");
-                            } catch (Error error) {
-                                // pass
-                            }
-                        });
-                    } catch (Error error) {
-                        // pass
-                    }
-                });
-            } catch (Error error) {
-                // pass
-            }
+            Bus.get_proxy.begin<ScreenSaver>(BusType.SESSION, "org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver", 0, null, (obj, res) => {
+                try {
+                    this.screensaver = Bus.get_proxy.end(res);
+                    this.screensaver.inhibit.begin("pdfpc", "Showing a presentation", (obj, res) => {
+                        try {
+                            this.screensaver_cookie = this.screensaver.inhibit.end(res);
+                            GLib.print("Screensaver inhibited\n");
+                        } catch (GLib.Error error) {
+                            // pass
+                        }
+                    });
+                } catch (GLib.Error error) {
+                    // pass
+                }
+            });
 
             readKeyBindings();
             readMouseBindings();
@@ -812,6 +806,7 @@ namespace pdfpc {
                 if (!this.frozen)
                     this.toggle_freeze();
                 });
+            add_action("hide", this.hide_presentation);
 
             add_action("overlay", this.toggle_skip);
             add_action("note", this.controllables_edit_note);
@@ -1012,7 +1007,7 @@ namespace pdfpc {
          * Notify each of the controllables of mouse scrolling
          */
         public bool scroll(Gdk.EventScroll scroll) {
-            if (!this.ignore_mouse_events) {
+            if (!this.ignore_mouse_events && !Options.disable_scrolling) {
                 switch (scroll.direction) {
                     case Gdk.ScrollDirection.UP:
                     case Gdk.ScrollDirection.LEFT:
@@ -1595,6 +1590,14 @@ namespace pdfpc {
         }
 
         /**
+         * Hide the presentation window
+         */
+        protected void hide_presentation() {
+            this.hidden = !this.hidden;
+            this.controllables_update();
+        }
+
+        /**
          * Edit note for current slide.
          */
         protected void controllables_edit_note() {
@@ -1684,15 +1687,6 @@ namespace pdfpc {
             if (this.timer.is_paused()) {
                 this.toggle_pause();
             }
-        }
-
-        /**
-         * Parse the given time string to a Time object
-         */
-        private time_t parseTime(string t) {
-            var tm = Time.local(time_t());
-            tm.strptime(t + ":00", "%H:%M:%S");
-            return tm.mktime();
         }
 
 

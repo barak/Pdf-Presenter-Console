@@ -251,6 +251,9 @@ namespace pdfpc {
                         Options.disable_cache_compression = true;
                     }
                     break;
+                case "disable-scrolling":
+                    Options.disable_scrolling = bool.parse(fields[2]);
+                    break;
                 case "next-height":
                     Options.next_height = int.parse(fields[2]);
                     break;
@@ -270,6 +273,10 @@ namespace pdfpc {
                     if (use_time_of_day) {
                         Options.use_time_of_day = true;
                     }
+                    break;
+                case "timer-pace-color":
+                    bool timer_pace_color = bool.parse(fields[2]);
+                    Options.timer_pace_color = timer_pace_color;
                     break;
                 default:
                     GLib.printerr("Unknown option %s in pdfpcrc\n", fields[1]);

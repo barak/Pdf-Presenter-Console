@@ -14,44 +14,44 @@ pdfpcrc \- pdfpc configuration file
 
 .SH DESCRIPTION
 .PP
-pdfpc(1) reads its configuration file from @SYSCONFDIR@/pdfpcrc. It also reads,
-if present, the file $XDG_CONFIG_DIR/pdfpc/pdfpcrc. If $XDG_CONFIG_DIR is not
-set, it uses $HOME/.config .
+pdfpc(1) reads its configuration from @SYSCONFDIR@/pdfpcrc.  It also reads
+$XDG_CONFIG_DIR/pdfpc/pdfpcrc if this file exists (if $XDG_CONFIG_DIR is not
+set, $HOME/.config will be used).
 
 .SS Keybindings
 .PP
-Following commands are aceepted:
+The following commands are accepted:
 .TP
 .B bind <key> <func> [<arg>]
 Bind a key to a function, passing a specified argument for functions which require one
 .TP
 .B unbind <key>
-Unbinds the given key
+Unbind the given key
 .TP
 .B unbind_all
-Unbinds all the keybindings
+Clear all the key bindings
 .TP
 .B mouse <button> <func>
-Binds a mouse button to a function
+Bind a mouse button to a function
 .TP
 .B unmouse <button>
-Unbinds a mouse button
+Unbind a mouse button
 .TP
 .B unmouse_all
-Unbinds all the mouse bindings
+Clear all the mouse bindings
 
 .PP
 A list of all possible functions can be obtained
-via the \-L command line option if pdfpc(1).
+via the \-L command line option of pdfpc(1).
 
 .SS Options
 .PP
-Some permanent changes can be configured via config file. The syntax is:
+Some permanent changes can be configured via the config file. The syntax is:
 .TP
 .B option <option_name> <option_value>
 
 .PP
-The following option_name are allowed:
+The following option_name's are recognized:
 
 .TP
 .B black-on-end
@@ -65,11 +65,14 @@ Percentage of the presenter screen to be used for the current slide. (int, Defau
 .TP
 .BI disable-caching
 see
-.B pdfpcrc(5)
+.B pdfpc(1)
 .TP
 .BI disable-compression
 see
-.B pdfpcrc(5)
+.B pdfpc(1)
+.TP
+.BI disable-scrolling
+Disable scrolling events on the presenter window (bool, Default false)
 .TP
 .B next-height
 Percentage of the height of the presenter screen to be used for the next slide. (int, Default 70)
@@ -82,7 +85,13 @@ Switch the presentation and the presenter screen. (bool, Default false)
 .TP
 .B time-of-day
 see
-.B pdfpcrc(5)
+.B pdfpc(1)
+.TP
+.B timer-pace-color
+Enable color hints of the timer, continuously indicating whether the
+presentation is progressing according to the expected pace (bool, Default true).
+See the timer operation description in
+.B pdfpc(1).
 
 .SH EXAMPLES
 
@@ -105,7 +114,6 @@ function, use
 .RS
 bind R reset
 .RE
-
 
 .PP
 To always activate the black-on-end option, one could add the following to the

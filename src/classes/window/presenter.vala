@@ -11,6 +11,7 @@
  * Copyright 2015-2016 Andy Barry
  * Copyright 2015 Jeremy Maitin-Shepard
  * Copyright 2017 Olivier Pantalé
+ * Copyright 2017 Evgeny Stambulchik
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -83,6 +84,11 @@ namespace pdfpc.Window {
         protected Gtk.Image blank_icon;
 
         /**
+         * Indication that the presentation window is hidden
+         */
+        protected Gtk.Image hidden_icon;
+
+        /**
          * Indication that the presentation display is frozen
          */
         protected Gtk.Image frozen_icon;
@@ -101,6 +107,11 @@ namespace pdfpc.Window {
          * Indication that the slide position has been loaded
          */
         protected Gtk.Image loaded_icon;
+
+        /**
+         * Indication that the notes are read-only (coming from PDF annotations)
+         */
+        protected Gtk.Image locked_icon;
 
         /**
          * Text box for displaying notes for the slides
@@ -245,7 +256,13 @@ namespace pdfpc.Window {
             if (this.metadata.font_size >= 0) {
                 Pango.FontDescription font_desc = get_notes_font_description();
 
-                font_desc.set_size(this.metadata.font_size);
+                // LEGCAY font size detection
+                // Before, we had the font size in absolute (device) units.
+                // These where typically larger then 1000
+                if (this.metadata.font_size >= 1000) {
+                    this.metadata.font_size /= Pango.SCALE;
+                }
+                font_desc.set_size(this.metadata.font_size * Pango.SCALE);
                 this.notes_view.override_font(font_desc);
             }
 
@@ -288,10 +305,12 @@ namespace pdfpc.Window {
             int icon_height = (int)Math.round(bottom_height*0.9);;
 
             this.blank_icon = this.load_icon("blank.svg", icon_height);
+            this.hidden_icon = this.load_icon("hidden.svg", icon_height);
             this.frozen_icon = this.load_icon("snow.svg", icon_height);
             this.pause_icon = this.load_icon("pause.svg", icon_height);
             this.saved_icon = this.load_icon("saved.svg", icon_height);
             this.loaded_icon = this.load_icon("loaded.svg", icon_height);
+            this.locked_icon = this.load_icon("locked.svg", icon_height);
 
             this.highlight_icon = this.load_icon("highlight.svg", icon_height);
             this.pen_icon = this.load_icon("pen.svg", icon_height);
@@ -384,10 +403,12 @@ namespace pdfpc.Window {
 
             var status = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 2);
             status.pack_start(this.blank_icon, false, false, 0);
+            status.pack_start(this.hidden_icon, false, false, 0);
             status.pack_start(this.frozen_icon, false, false, 0);
             status.pack_start(this.pause_icon, false, false, 0);
             status.pack_start(this.saved_icon, false, false, 0);
             status.pack_start(this.loaded_icon, false, false, 0);
+            status.pack_start(this.locked_icon, false, false, 0);
             status.pack_start(this.highlight_icon, false, false, 0);
             status.pack_start(this.pen_icon, false, false, 0);
             status.pack_start(this.eraser_icon, false, false, 0);
@@ -500,6 +521,13 @@ namespace pdfpc.Window {
             } else {
                 this.blank_icon.hide();
             }
+            if (this.presentation_controller.hidden) {
+                this.hidden_icon.show();
+                // Ensure the presenter window remains focused
+                this.present();
+            } else {
+                this.hidden_icon.hide();
+            }
             if (this.presentation_controller.frozen) {
                 this.frozen_icon.show();
             } else {
@@ -523,6 +551,7 @@ namespace pdfpc.Window {
             this.faded_to_black = false;
             this.saved_icon.hide();
             this.loaded_icon.hide();
+            this.locked_icon.hide();
         }
 
         /**
@@ -573,10 +602,25 @@ namespace pdfpc.Window {
             }
         }
 
+        private void blink_lock_icon() {
+            this.locked_icon.show();
+            GLib.Timeout.add(1000, () => {
+                    this.locked_icon.hide();
+                    return false;
+                });
+        }
+
         /**
          * Edit a note. Basically give focus to notes_view
          */
         public void edit_note() {
+            // Disallow editing notes imported from PDF annotations
+            int number = this.presentation_controller.current_user_slide_number;
+            if (this.metadata.get_notes().is_note_read_only(number)) {
+                blink_lock_icon();
+                return;
+            }
+
             this.notes_view.editable = true;
             this.notes_view.cursor_visible = true;
             this.notes_view.grab_focus();
@@ -646,8 +690,9 @@ namespace pdfpc.Window {
         public void increase_font_size() {
             Pango.FontDescription font_desc = get_notes_font_description();
 
-            int font_size = (int)(font_desc.get_size()*1.1);
-            font_desc.set_size(font_size);
+            int font_size = font_desc.get_size() / Pango.SCALE;
+            font_size += 2;
+            font_desc.set_size(font_size * Pango.SCALE);
             this.metadata.font_size = font_size;
             this.notes_view.override_font(font_desc);
         }
@@ -658,8 +703,9 @@ namespace pdfpc.Window {
         public void decrease_font_size() {
             Pango.FontDescription font_desc = get_notes_font_description();
 
-            int font_size = (int)(font_desc.get_size()/1.1);
-            font_desc.set_size(font_size);
+            int font_size = font_desc.get_size() / Pango.SCALE;
+            font_size = (int)GLib.Math.fmax(font_size - 2, 0);
+            font_desc.set_size(font_size * Pango.SCALE);
             this.metadata.font_size = font_size;
             this.notes_view.override_font(font_desc);
         }

@@ -7,11 +7,13 @@
  * Copyright 2012, 2015 Robert Schroll
  * Copyright 2012 Pascal Germroth
  * Copyright 2012 David Vilar
- * Copyright 2012, 2015 Andreas Bilke
+ * Copyright 2012, 2015, 2017 Andreas Bilke
  * Copyright 2013 Stefan Tauner
  * Copyright 2015 Maurizio Tomasi
  * Copyright 2015 endzone
  * Copyright 2017 Olivier Pantalé
+ * Copyright 2017 Evgeny Stambulchik
+ * Copyright 2017 Philipp Berndt
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -112,6 +114,12 @@ namespace pdfpc.Metadata {
         private int _font_size = -1;
         public int font_size { get { return _font_size; } set { _font_size = value; } }
 
+
+        /**
+         * A file to read additional notes from
+         */
+        private string? notes_include = null;
+
         /**
          * Parse the given pdfpc file
          */
@@ -121,6 +129,8 @@ namespace pdfpc.Metadata {
                 string content;
                 GLib.FileUtils.get_contents(this.pdfpc_fname, out content);
                 GLib.Regex regex = new GLib.Regex("(\\[[A-Za-z_]+\\])");
+
+                string? notes_content = null;
 
                 string[] config_sections = regex.split_full(content);
                 // config_sections[0] is empty
@@ -150,10 +160,6 @@ namespace pdfpc.Metadata {
                             this.end_user_slide = int.parse(section_content);
                             break;
                         }
-                        case "[file]": {
-                            this.pdf_fname = section_content;
-                            break;
-                        }
                         case "[font_size]": {
                             this.font_size = int.parse(section_content);
                             break;
@@ -171,7 +177,11 @@ namespace pdfpc.Metadata {
                             break;
                         }
                         case "[notes]": {
-                            notes.parse_lines(section_content.split("\n"));
+                            notes_content = section_content;
+                            break;
+                        }
+                        case "[notes_include]": {
+                            this.notes_include = section_content;
                             break;
                         }
                         case "[notes_position]": {
@@ -198,6 +208,38 @@ namespace pdfpc.Metadata {
                             break;
                         }
                     }
+                }
+
+                if (this.notes_include != null) {
+                    parse_notes_file();
+                }
+                if (notes_content != null) {
+                    notes.parse_lines(notes_content.split("\n"));
+                }
+            } catch (Error e) {
+                GLib.printerr("%s\n", e.message);
+                Process.exit(1);
+            }
+        }
+
+
+        /**
+         * Parse an additonal notes file
+         */
+        void parse_notes_file() {
+            try {
+                string content;
+                string full_notes_include = this.notes_include;
+                if (!GLib.Path.is_absolute(this.notes_include)) {
+                    full_notes_include = GLib.Path.build_filename(GLib.Path.get_dirname(this.pdfpc_fname), this.notes_include);
+                }
+                GLib.FileUtils.get_contents(full_notes_include, out content);
+                if (content.substring(0, "[notes]".length) == "[notes]") {
+                    var notes_content = content.substring("[notes]".length + 1);
+                    notes.parse_lines(notes_content.split("\n"), true);
+                } else {
+                    GLib.printerr("File %s does not start with [notes]\n", this.notes_include);
+                    Process.exit(1);
                 }
             } catch (Error e) {
                 GLib.printerr("%s\n", e.message);
@@ -231,18 +273,18 @@ namespace pdfpc.Metadata {
         /**
          * Fill the path information starting from the user provided filename
          */
-        void fill_path_info(string fname) {
-            int l = fname.length;
-
-            if (l < 6 || fname[l-6:l] != ".pdfpc") {
+        void fill_path_info(string fname, string? fpcname = null) {
+            if (fpcname != null) {
+                this.pdfpc_fname = fpcname;
+                this.pdf_fname = fname;
+            } else {
                 this.pdf_fname = fname;
                 int extension_index = fname.last_index_of(".");
-                if (extension_index > -1)
+                if (extension_index > -1) {
                     this.pdfpc_fname = fname[0:extension_index] + ".pdfpc";
-                else
+                } else {
                     this.pdfpc_fname = fname + ".pdfpc";
-            } else {
-                this.pdfpc_fname = fname;
+                }
             }
         }
 
@@ -266,16 +308,30 @@ namespace pdfpc.Metadata {
                               + format_end_user_slide()
                               + format_last_saved_slide()
                               + format_font_size()
+                              + format_notes_include()
                               + format_notes();
+
             try {
                 if (contents != "" || GLib.FileUtils.test(this.pdfpc_fname, (GLib.FileTest.IS_REGULAR))) {
-                    contents = "[file]\n" + this.pdf_fname + "\n" + contents;
                     GLib.FileUtils.set_contents(this.pdfpc_fname, contents);
                 }
             } catch (Error e) {
                 GLib.printerr("Failed to store metadata on disk: %s\nThe metadata was:\n\n%s", e.message, contents);
                 Process.exit(1);
             }
+        }
+
+        /**
+         * Format the [note_include] section
+         */
+        protected string format_notes_include() {
+            string contents = "";
+
+            if (this.notes_include != null) {
+                contents += "[notes_include]\n" + this.notes_include;
+            }
+
+            return contents;
         }
 
         /**
@@ -363,16 +419,34 @@ namespace pdfpc.Metadata {
          * Fill the slide notes from pdf text annotations.
          */
         private void notes_from_document() {
-            for(int i = 0; i < this.page_count; i++) {
+            for (int i = 0; i < this.page_count; i++) {
                 var page = this.document.get_page(i);
+                int user_slide = real_slide_to_user_slide(i);
+                string note_text = this.notes.get_note_for_slide(user_slide);
+
+                // We never overwrite existing notes
+                if (note_text != "") {
+                    continue;
+                }
+
                 List<Poppler.AnnotMapping> anns = page.get_annot_mapping();
                 foreach(unowned Poppler.AnnotMapping am in anns) {
                     var a = am.annot;
-                    switch(a.get_annot_type()) {
+                    switch (a.get_annot_type()) {
                         case Poppler.AnnotType.TEXT:
-                            this.notes.set_note(a.get_contents(), real_slide_to_user_slide(i));
+                        case Poppler.AnnotType.FREE_TEXT:
+                        case Poppler.AnnotType.HIGHLIGHT:
+                        case Poppler.AnnotType.UNDERLINE:
+                        case Poppler.AnnotType.SQUIGGLY:
+                            if (note_text.length > 0) {
+                                note_text += "\n";
+                            }
+                            note_text += a.get_contents();
                             break;
                     }
+                }
+                if (note_text != "") {
+                    this.notes.set_note(note_text, user_slide, true);
                 }
             }
         }
@@ -380,7 +454,7 @@ namespace pdfpc.Metadata {
         /**
          * Base constructor taking the file url to the pdf file
          */
-        public Pdf(string fname) {
+        public Pdf(string fname, string? fpcname = null) {
             this.url = File.new_for_commandline_arg(fname).get_uri();
 
             this.action_mapping = new Gee.ArrayList<ActionMapping>();
@@ -389,7 +463,8 @@ namespace pdfpc.Metadata {
 
             this.duration = Options.duration;
 
-            fill_path_info(fname);
+            fill_path_info(fname, fpcname);
+
             notes = new slides_notes();
             skips_by_user = false;
             string? skip_line = null;
@@ -489,13 +564,16 @@ namespace pdfpc.Metadata {
          * Returns the offset to move the current user_slide_number
          */
         public int toggle_skip(int slide_number, int user_slide_number) {
-            if (slide_number == 0) {
+            if (slide_number == 0 || user_slide_number == 0) {
                 return 0; // We cannot skip the first slide
+            }
+            int l = this.user_view_indexes.length;
+            if (l < 2) {
+                return 0; // Can no longer skip...
             }
             skips_by_user = true;
             int converted_user_slide = user_slide_to_real_slide(user_slide_number);
             int offset;
-            int l = this.user_view_indexes.length;
             if (converted_user_slide == slide_number) { // Activate skip
                 int[] new_indexes = new int[ l-1 ];
                 for (int i = 0; i < user_slide_number; ++i) {
