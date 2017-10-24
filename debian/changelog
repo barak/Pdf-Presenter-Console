@@ -1,3 +1,9 @@
+pdf-presenter-console (4.1.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release (candidate)
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 24 Oct 2017 10:15:28 +0100
+
 pdf-presenter-console (4.0.8-2) unstable; urgency=medium
 
   * Merge upstream fix (closes: #855525)
