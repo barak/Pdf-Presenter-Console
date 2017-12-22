@@ -227,7 +227,7 @@ pdf-presenter-console (2.0-4) unstable; urgency=low
 pdf-presenter-console (2.0-3) unstable; urgency=low
 
   * alias for binary (debian/pdf-presenter-console.links) (closes: #597908)
-  
+
  -- Barak A. Pearlmutter <bap@debian.org>  Tue, 01 Mar 2011 14:52:29 +0000
 
 pdf-presenter-console (2.0-2) unstable; urgency=low
@@ -300,4 +300,3 @@ pdf-presenter-console (1.1-1) unstable; urgency=low
   * Initial release (Closes: #567685)
 
  -- Barak A. Pearlmutter <bap@debian.org>  Sat, 30 Jan 2010 16:40:33 +0100
-
