@@ -18,6 +18,7 @@ Package: pdf-presenter-console
 Provides: pdfpc
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: gstreamer1.0-gtk3
 Description: multi-monitor presentation tool (ala Keynote) for PDF files
  PPC is a viewer for PDF which uses Keynote-like multi-monitor output
  to provide meta information to the speaker.  It can show a normal
