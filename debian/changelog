@@ -1,8 +1,14 @@
+pdf-presenter-console (4.1.2-1) unstable; urgency=medium
+
+  * New upstream release  (closes: #888677)
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 07 May 2018 23:13:18 +0100
+
 pdf-presenter-console (4.1-4) unstable; urgency=medium
 
   * Recommends: gstreamer1.0-gtk3 as needed for videos (closes: #895224)
     See https://github.com/pdfpc/pdfpc/issues/339#issuecomment-381108541
-  * patch for fuzzy rendering of images regression (closes: #888677)
+  * patch for fuzzy rendering of images regression
 
  -- Barak A. Pearlmutter <bap@debian.org>  Mon, 30 Apr 2018 18:44:43 +0100
 
