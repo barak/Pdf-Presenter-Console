@@ -3,7 +3,7 @@ pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
 pkg_check_modules(GIO REQUIRED gio-2.0)
 pkg_check_modules(GEE REQUIRED gee-0.8)
 pkg_check_modules(POPPLER REQUIRED poppler-glib>=0.22)
-pkg_check_modules(GTK REQUIRED gtk+-3.0>=3.10)
+pkg_check_modules(GTK REQUIRED gtk+-3.0>=3.20)
 list (FIND GTK_STATIC_LIBRARIES "X11" _index)
 if (${_index} GREATER -1)
     set(WITH_X11 1)
@@ -79,6 +79,27 @@ if (MOVIES)
 else ()
     LIST(REMOVE_ITEM VALA_SRC classes/action/movie.vala)
 endif ()
+
+# Check for some compiler flags to suppress excessive Vala-triggered warnings
+# Since gcc >= 4.4 can silently ignore unrecognized -W-no* flags, we test
+# for positive options instead.
+include(CheckCCompilerFlag)
+check_c_compiler_flag(-Wdiscarded-qualifiers CC_HAS_DISCARDED_QUALIFIERS)
+if (CC_HAS_DISCARDED_QUALIFIERS)
+    add_definitions("-Wno-discarded-qualifiers")
+endif()
+check_c_compiler_flag(-Wincompatible-pointer-types CC_HAS_INCOMPATIBLE_POINTER_TYPES)
+if (CC_HAS_INCOMPATIBLE_POINTER_TYPES)
+    add_definitions("-Wno-incompatible-pointer-types")
+endif()
+check_c_compiler_flag(-Wdeprecated-declarations CC_HAS_DEPRECATED_DECLARATIONS)
+if (CC_HAS_DEPRECATED_DECLARATIONS)
+    add_definitions("-Wno-deprecated-declarations")
+endif()
+check_c_compiler_flag(-Wimplicit-function-declaration CC_HAS_IMPLICIT_FUNCTION_DECLARATION)
+if (CC_HAS_IMPLICIT_FUNCTION_DECLARATION)
+    add_definitions("-Wno-implicit-function-declaration")
+endif()
 
 vala_precompile(VALA_C
     ${VALA_SRC}

@@ -194,6 +194,13 @@ namespace pdfpc {
                 GLib.printerr("--notes option detected. Disable auto grouping.\n");
             }
 
+            // if pdfpc runs at a tablet we force the toolbox to be shown
+            var seat = Gdk.Display.get_default().get_default_seat();
+            var touchSeats = seat.get_slaves(Gdk.SeatCapabilities.TOUCH);
+            if (touchSeats.length() > 0) {
+                Options.toolbox_shown = true;
+            }
+
             ConfigFileReader configFileReader = new ConfigFileReader();
             configFileReader.readConfig(Path.build_filename(Paths.SOURCE_PATH, "rc/pdfpcrc"));
             configFileReader.readConfig(Path.build_filename(Paths.CONF_PATH, "pdfpcrc"));
@@ -216,9 +223,9 @@ namespace pdfpc {
                 string[] actions = PresentationController.getActionDescriptions();
                 for (int i = 0; i < actions.length; i+=2) {
                     string tabAlignment = "\t";
-                    if (actions[i].length < 8)
+                    if (actions[i].length < 12)
                         tabAlignment += "\t";
-                    GLib.print("\t%s%s=> %s\n", actions[i], tabAlignment, actions[i+1]);
+                    GLib.print("    %s%s=> %s\n", actions[i], tabAlignment, actions[i+1]);
                 }
 
                 return;
@@ -275,14 +282,12 @@ namespace pdfpc {
 
             var screen = Gdk.Screen.get_default();
             if (!Options.windowed && !Options.single_screen && screen.get_n_monitors() > 1) {
-                int presenter_monitor, presentation_monitor;
-                if (Options.display_switch != true) {
-                    presenter_monitor = screen.get_primary_monitor();
-                } else {
-                    presenter_monitor = (screen.get_primary_monitor() + 1) % 2;
+                int presenter_monitor = screen.get_primary_monitor();
+                if (Options.display_switch) {
+                    presenter_monitor = (presenter_monitor + 1) % 2;
                 }
 
-                presentation_monitor = (presenter_monitor + 1) % 2;
+                int presentation_monitor = (presenter_monitor + 1) % 2;
                 this.controller.presenter = this.create_presenter(metadata, presenter_monitor);
                 this.controller.presentation = this.create_presentation(metadata, presentation_monitor, width, height);
             } else if (Options.windowed && !Options.single_screen) {

@@ -31,8 +31,8 @@
 
 [DBus (name = "org.freedesktop.ScreenSaver")]
 public interface ScreenSaver : Object {
-    public abstract async uint32 inhibit(string application_name, string reason) throws IOError;
-    public abstract void un_inhibit(uint32 cookie) throws IOError;
+    public abstract async uint32 inhibit(string application_name, string reason) throws DBusError, IOError;
+    public abstract void un_inhibit(uint32 cookie) throws DBusError, IOError;
 }
 
 namespace pdfpc {
@@ -227,8 +227,10 @@ namespace pdfpc {
             }
 
             public uint hash() {
-                var uintHashFunc = Gee.Functions.get_hash_func_for(Type.from_name("uint"));
-                return uintHashFunc(this.keycode | this.modMask); // | is probable the best combinator, but for this small application it should suffice
+                // see gdk/gdkkeysyms.h modMask is usally in the form of
+                // 0xFF??. Keycodes are usally 0x??. We shift modMask by 8 bits
+                // to combine both codes.
+                return (this.modMask << 8) | this.keycode;
             }
 
             public bool equal_to(KeyDef other) {
@@ -316,7 +318,7 @@ namespace pdfpc {
         /* pen mode state */
         public Gtk.DrawingArea? presenter_pen_surface;
         public Gtk.DrawingArea? presentation_pen_surface;
-        private Drawings.Drawing pen_drawing;
+        public Drawings.Drawing pen_drawing;
         private Drawings.DrawingTool? current_mouse_tool = null;
         private Drawings.DrawingTool? current_pen_drawing_tool = null;
         private bool mouse_tool_is_eraser = false;
@@ -438,7 +440,21 @@ namespace pdfpc {
             queue_pen_surface_draws();
         }
 
-        private void queue_pen_surface_draws() {
+        public void set_pen_size(double width) {
+            if (width > 500) {
+                width = 500;
+            } else
+            if (width < pen_step) {
+                width = pen_step;
+            }
+            current_pen_drawing_tool.width = width;
+        }
+
+        public double get_pen_size() {
+            return current_pen_drawing_tool.width;
+        }
+
+        public void queue_pen_surface_draws() {
             if (presenter != null) {
                 presenter_pen_surface.queue_draw();
             }
@@ -679,11 +695,9 @@ namespace pdfpc {
         }
 
         protected void draw_pointer(Cairo.Context context, Gtk.Allocation a) {
-            int x = (int)(a.width*pointer_x);
-            int y = (int)(a.height*pointer_y);
-            int r = (int)(a.height*0.001*pointer_size);
-
-            if (highlight_w>0) {
+            // Draw the highlighted area, but ignore very short drags
+            // made unintentionally by mouse clicks
+            if (highlight_w > 0.01 && highlight_h > 0.01) {
                 context.rectangle(0,0,a.width, a.height);
                 context.new_sub_path();
                 context.rectangle((int)(highlight_x*a.width), (int)(highlight_y*a.height), (int)(highlight_w*a.width), (int)(highlight_h*a.height));
@@ -692,12 +706,14 @@ namespace pdfpc {
                 context.set_source_rgba(0,0,0,0.5);
                 context.fill_preserve();
 
-                //cursor
                 context.new_path();
-                context.set_source_rgba(255,0,0,0.5);
-                context.arc(x, y, r, 0, 2*Math.PI);
-                context.fill();
-            } else {
+            }
+            // Draw the pointer when not dragging
+            if (drag_x == -1) {
+                int x = (int)(a.width*pointer_x);
+                int y = (int)(a.height*pointer_y);
+                int r = (int)(a.height*0.001*pointer_size);
+
                 context.set_source_rgba(255,0,0,0.5);
                 context.arc(x, y, r, 0, 2*Math.PI);
                 context.fill();
@@ -818,6 +834,8 @@ namespace pdfpc {
             add_action("increaseFontSize", this.increase_font_size);
             add_action("decreaseFontSize", this.decrease_font_size);
 
+            add_action("toggleToolbox", this.toggle_toolbox);
+
             add_action("exitState", this.exit_state);
             add_action("quit", this.quit);
         }
@@ -835,44 +853,55 @@ namespace pdfpc {
         }
 
         /**
-         * Gets an array wit all function names
+         * Get an array with all action names
          *
-         * It would be more legant yo use the keys property of actionNames, but
+         * It would be more elegant to use the key property of actionNames, but
          * we would need an instance for doing this...
          */
         public static string[] getActionDescriptions() {
-            return {"next", "Go to next slide",
+            return {
+                "next", "Go to the next slide",
                 "next10", "Jump 10 slides forward",
                 "lastOverlay", "Jump to the last overlay of the current slide",
-                "nextOverlay", "Jump forward outside of current overlay",
-                "prev", "Go to previous slide",
+                "nextOverlay", "Jump forward outside of the current overlay",
+                "prev", "Go to the previous slide",
                 "prev10", "Jump 10 slides back",
-                "prevOverlay", "Jump back outside of current overlay",
+                "prevOverlay", "Jump back outside of the current overlay",
                 "goto", "Ask for a page to jump to",
-                "gotoFirst", "Jump to first slide",
-                "gotoLast", "Jump to last slide",
+                "gotoFirst", "Jump to the first slide",
+                "gotoLast", "Jump to the last slide",
+                "nextUnseen", "Jump to the next unseen slide",
+                "prevSeen", "Jump to the last previously seen slide",
                 "overview", "Show the overview mode",
                 "histBack", "Go back in history",
                 "start", "Start the timer",
                 "pause", "Pause the timer",
                 "resetTimer", "Reset the timer",
                 "reset", "Reset the presentation",
-                "blank", "Blank presentation screen",
-                "freeze", "Toggle freeze presentation screen",
-                "freezeOn", "Freeze presentation screen if unfrozen",
-                "overlay", "Mark current slide as overlay slide",
-                "note", "Edit note for current slide",
-                "endSlide", "Set current slide as end slide",
-                "lastSlide", "Set last displayed slide",
-                "jumpLastSlide", "Goto last displayed slide",
-                "increaseFontSize", "Increase the current font size by 10%",
-                "decreaseFontSize", "Decrease the current font size by 10%",
-                "togglePointer", "Toggle pointer mode",
-                "increasePointer", "Increase pointer size",
-                "decreasePointer", "Decrease pointer size",
+                "blank", "Blank the presentation screen",
+                "hide", "Hide the presentation screen",
+                "freeze", "Toggle freeze the presentation screen",
+                "freezeOn", "Freeze the presentation screen",
+                "overlay", "Mark the current slide as an overlay slide",
+                "note", "Edit notes for the current slide",
+                "endSlide", "Set the current slide as the end slide",
+                "lastSlide", "Set the last displayed slide",
+                "jumpLastSlide", "Goto the last displayed slide",
+                "increaseFontSize", "Increase the current font size by 2pt",
+                "decreaseFontSize", "Decrease the current font size by 2pt",
+                "togglePointer", "Toggle the pointer mode",
+                "increasePointer", "Increase the pointer size",
+                "decreasePointer", "Decrease the pointer size",
+                "toggleDrawing", "Toggle the drawing mode",
+                "toggleEraser", "Toggle between eraser/pen in the drawing mode",
+                "increasePen", "Increase the pen size",
+                "decreasePen", "Decrease the pen size",
+                "clearDrawing", "Clear all drawings on the current slide",
+                "hideDrawing", "Hide all drawings on the current slide",
+                "toggleToolbox", "Toggle the toolbox",
                 "exitState", "Exit \"special\" state (pause, freeze, blank)",
                 "quit", "Exit pdfpc",
-                "setPenColor", "Change pen color (requires argument)",
+                "setPenColor", "Change the pen color (requires an argument)",
             };
         }
 
@@ -1585,7 +1614,7 @@ namespace pdfpc {
         /**
          * Fill the presentation display with black
          */
-        protected void fade_to_black() {
+        public void fade_to_black() {
             this.faded_to_black = !this.faded_to_black;
             this.controllables_update();
         }
@@ -1593,7 +1622,7 @@ namespace pdfpc {
         /**
          * Hide the presentation window
          */
-        protected void hide_presentation() {
+        public void hide_presentation() {
             this.hidden = !this.hidden;
             this.controllables_update();
         }
@@ -1621,12 +1650,13 @@ namespace pdfpc {
         /**
          * Freeze the display
          */
-        protected void toggle_freeze() {
+        public void toggle_freeze() {
             this.frozen = !this.frozen;
             if (!this.frozen) {
                 this.faded_to_black = false;
             }
             this.controllables_update();
+            main_view.freeze_toggled(this.frozen);
         }
 
         /**
@@ -1658,7 +1688,7 @@ namespace pdfpc {
         /**
          * Pause the timer
          */
-        protected void toggle_pause() {
+        public void toggle_pause() {
             this.timer.pause();
             this.controllables_update();
         }
@@ -1676,6 +1706,14 @@ namespace pdfpc {
 
         protected void decrease_font_size() {
             this.decrease_font_size_request();
+        }
+
+        /**
+         * Toggle toolbox visibility
+         */
+        public void toggle_toolbox() {
+            Options.toolbox_shown = !Options.toolbox_shown;
+            this.controllables_update();
         }
 
         protected void exit_state() {
