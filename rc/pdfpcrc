@@ -17,6 +17,7 @@ bind k         nextUnseen
 # Back movement
 bind Left      prev
 bind Prior     prev
+bind L         firstOverlay
 bind Up        prevOverlay
 bind S+Left    prev10
 bind S+Prior   prev10

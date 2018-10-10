@@ -347,7 +347,6 @@ namespace pdfpc {
                 draw_pen_surface(context, presentation_allocation, false);
                 return true;
             });
-            this.controllables_update();
         }
 
         protected void init_presenter_pen() {
@@ -544,15 +543,18 @@ namespace pdfpc {
             pen_enabled = !pen_enabled;
             if (pen_enabled) {
                 pen_drawing_present = true;
-                if (this._presenter != null) {
-                    this._presenter.get_window().set_event_compression(false);
-                }
                 current_pen_drawing_tool = pen_drawing.pen;
-            } else {
-                if (this._presenter != null) {
-                    this.presenter.get_window().set_event_compression(true);
-                }
             }
+
+            // Disable event compression for smoother drawing
+            if (this.presenter != null) {
+                this.presenter.get_window().set_event_compression(!pen_enabled);
+            }
+
+            // When drawing mode is inactive, make the drawing surface
+            // transparent to the input events
+            presenter_pen_surface.get_window().set_pass_through(!pen_enabled);
+
             hide_or_show_pen_surfaces();
             this.controllables_update();
         }
@@ -802,6 +804,7 @@ namespace pdfpc {
             add_action("nextOverlay", this.next_user_page);
             add_action("prev", this.previous_page);
             add_action("prev10", this.back10);
+            add_action("firstOverlay", this.jump_to_first_overlay);
             add_action("prevOverlay", this.previous_user_page);
             add_action("prevSeen", this.previous_seen);
             add_action("nextUnseen", this.next_unseen);
@@ -866,6 +869,7 @@ namespace pdfpc {
                 "nextOverlay", "Jump forward outside of the current overlay",
                 "prev", "Go to the previous slide",
                 "prev10", "Jump 10 slides back",
+                "firstOverlay", "Jump to the first overlay of the current slide",
                 "prevOverlay", "Jump back outside of the current overlay",
                 "goto", "Ask for a page to jump to",
                 "gotoFirst", "Jump to the first slide",
@@ -1316,29 +1320,40 @@ namespace pdfpc {
          */
         public void jump_to_last_overlay() {
             this.timer.start();
-            bool needs_update = false; // Did we change anything? Default: no
 
-            // there is a next user slide
-            if (this.current_user_slide_number < this.metadata.get_user_slide_count() - 1) {
-                // last overlay = next user slide (as real) - 1
-                this.current_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number + 1) - 1;
-                needs_update = true;
-            } else {
-                // we are at the last user slide
-                // last overlay == last last
-                this.current_slide_number = this.n_slides - 1;
-                needs_update = true;
-            }
+            int destination = this.metadata.user_slide_to_real_slide(this.current_user_slide_number, true);
+            if (this.current_slide_number != destination) {
+                this.current_slide_number = destination;
 
-            if (needs_update) {
                 if (!this.frozen) {
                     this.faded_to_black = false;
                 }
                 this.controllables_update();
-            }
 
-            if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
-                this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
+                if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
+                    this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
+                }
+            }
+        }
+
+        /**
+         * Jump to the first overlay for the current user slide
+         */
+        public void jump_to_first_overlay() {
+            this.timer.start();
+
+            int destination = this.metadata.user_slide_to_real_slide(this.current_user_slide_number, false);
+            if (this.current_slide_number != destination) {
+                this.current_slide_number = destination;
+
+                if (!this.frozen) {
+                    this.faded_to_black = false;
+                }
+                this.controllables_update();
+
+                if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
+                    this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
+                }
             }
         }
 
