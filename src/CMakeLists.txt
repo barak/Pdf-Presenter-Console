@@ -3,7 +3,7 @@ pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
 pkg_check_modules(GIO REQUIRED gio-2.0)
 pkg_check_modules(GEE REQUIRED gee-0.8)
 pkg_check_modules(POPPLER REQUIRED poppler-glib>=0.22)
-pkg_check_modules(GTK REQUIRED gtk+-3.0>=3.20)
+pkg_check_modules(GTK REQUIRED gtk+-3.0>=3.22)
 list (FIND GTK_STATIC_LIBRARIES "X11" _index)
 if (${_index} GREATER -1)
     set(WITH_X11 1)
@@ -25,11 +25,6 @@ if (MOVIES)
         gstreamer-audio-1.0
         gstreamer-video-1.0
     )
-endif ()
-
-if ("${GTK_VERSION}" VERSION_LESS 3.18 OR "${VALA_VERSION}" VERSION_LESS 0.30)
-    message(WARNING "Using legacy GTK API")
-    set(EXTRA_VALA_OPTIONS ${EXTRA_VALA_OPTIONS} -D GTK_LEGACY)
 endif ()
 
 if ("${POPPLER_VERSION}" VERSION_GREATER 0.53 AND "${VALA_VERSION}" VERSION_GREATER 0.36.3)
@@ -117,10 +112,6 @@ OPTIONS
     --debug
     --enable-experimental
     ${EXTRA_VALA_OPTIONS}
-GENERATE_HEADER
-    presenter
-GENERATE_VAPI
-    presenter
 CUSTOM_VAPIS
     ${CMAKE_CURRENT_BINARY_DIR}/paths.vala
     ${CMAKE_CURRENT_SOURCE_DIR}/custom_binding.vapi
@@ -152,11 +143,4 @@ install(TARGETS
 RUNTIME
 DESTINATION
     bin
-)
-
-# The tests need a library version of all the pdf_presenter_stuff
-add_library(pdf_presenter_console_test_library
-    SHARED
-    EXCLUDE_FROM_ALL
-    ${VALA_C} presenter.h presenter.vapi
 )

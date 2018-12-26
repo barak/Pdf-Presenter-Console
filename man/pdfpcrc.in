@@ -51,13 +51,13 @@ The following option_name's are recognized:
 
 .TP
 .B black-on-end
-Add an additional black slide at the end of the presentation (bool, Default false)
+Add an additional black slide at the end of the presentation (bool, Default is false).
 .TP
 .B current-height
-Percentage of the height of the presenter screen to be used for the current slide. (int, Default 80)
+Percentage of the height of the presenter screen to be used for the current slide (int, Default is 80).
 .TP
 .B current-size
-Percentage of the presenter screen to be used for the current slide. (int, Default 60)
+Percentage of the presenter screen to be used for the current slide (int, Default is 60).
 .TP
 .BI disable-caching
 see
@@ -67,36 +67,66 @@ see
 see
 .B \fBpdfpc\fR(1)
 .TP
+.BI disable-input-autodetection
+Do not automatically detect type (pen or eraser) of tablet input devices (bool,
+Default is false).
+.TP
 .BI disable-scrolling
-Disable scrolling events on the presenter window (bool, Default false)
+Disable scrolling events on the presenter window (bool, Default is false).
+.TP
+.BI enable-auto-srt-load
+Try loading video subtitle files automatically. For each video media, pdfpc will
+append ".srt" to the media URI and attempt to load a subtitle file (in the SRT
+format) from that location (bool, Default is false).
+.TP
+.B move-on-mapped
+Dual-monitor full-screen window placement is a tricky business. Some window
+managers (e.g., FVWM) ignore the placement if made before the window is
+shown. This option enables a workaround (bool, Default is false).
 .TP
 .B next-height
-Percentage of the height of the presenter screen to be used for the next slide. (int, Default 70)
+Percentage of the height of the presenter screen to be used for the next slide (int, Default is 70).
 .TP
 .B overview-min-size
-Minimum width for the overview miniatures, in pixels. (int, Default 150)
+Minimum width for the overview miniatures, in pixels (int, Default is 150).
+.TP
+.B pointer-color
+Set the pointer color. Can be a literal color name or a #rrggbb representation
+(default is red).
+.TP
+.B pointer-opacity
+Set the pointer opacity in percent (int, default is 50).
+.TP
+.B pointer-size
+Set the initial pointer size, in pixels (int, default is 10).
+.TP
+.B presentation-screen
+Screen to be used for the presentation (output name, see e.g. "xrandr --listmonitors").
+.TP
+.B presenter-screen
+Screen to be used for the presenter (output name).
 .TP
 .B switch-screens
-Switch the presentation and the presenter screen. (bool, Default false)
+Switch the presentation and the presenter screen (bool, Default is false).
 .TP
 .B time-of-day
 Display the current time instead of the timer
 .TP
 .B timer-pace-color
 Enable color hints of the timer, continuously indicating whether the
-presentation is progressing according to the expected pace (bool, Default true).
+presentation is progressing according to the expected pace (bool, Default is true).
 See the timer operation description in
 .B \fBpdfpc\fR(1).
 .TP
 .B toolbox
-Show the toolbox on startup (bool, Default false)
+Show the toolbox on startup (bool, Default is false).
 .TP
 .B toolbox-direction
-Set the toolbox direction (LtoR, RtoL, TtoB, or BtoT for the left-to-right,
-right-to-left, top-to-bottom, or botton-to-top, respectively). Default is LtoR.
+Set the toolbox direction. LtoR, RtoL, TtoB, or BtoT for the left-to-right,
+right-to-left, top-to-bottom, or botton-to-top, respectively (Default is LtoR).
 .TP
 .B toolbox-minimized
-Set the initial toolbox state minimized (bool, Default false)
+Set the initial toolbox state minimized (bool, Default is false).
 
 .SH EXAMPLES
 

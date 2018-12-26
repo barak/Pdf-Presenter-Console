@@ -180,7 +180,7 @@ namespace pdfpc {
             uint8[] raw_datau8;
             try {
                 var splitRegex = new Regex("\\s\\s*");
-                var commentRegex = new Regex("\\s*#.*$");
+                var commentRegex = new Regex("^\\s*#.*$");
                 file.load_contents(null, out raw_datau8, null);
                 string[] lines = ((string) raw_datau8).split("\n");
                 for (int i=0; i<lines.length; ++i) {
@@ -251,14 +251,38 @@ namespace pdfpc {
                         Options.disable_cache_compression = true;
                     }
                     break;
+                case "disable-input-autodetection":
+                    Options.disable_input_autodetection = bool.parse(fields[2]);
+                    break;
                 case "disable-scrolling":
                     Options.disable_scrolling = bool.parse(fields[2]);
+                    break;
+                case "enable-auto-srt-load":
+                    Options.auto_srt = bool.parse(fields[2]);
+                    break;
+                case "move-on-mapped":
+                    Options.move_on_mapped = bool.parse(fields[2]);
                     break;
                 case "next-height":
                     Options.next_height = int.parse(fields[2]);
                     break;
                 case "overview-min-size":
                     Options.min_overview_width = int.parse(fields[2]);
+                    break;
+                case "pointer-color":
+                    Options.pointer_color = fields[2];
+                    break;
+                case "pointer-opacity":
+                    Options.pointer_opacity = int.parse(fields[2]);
+                    break;
+                case "pointer-size":
+                    Options.pointer_size = int.parse(fields[2]);
+                    break;
+                case "presentation-screen":
+                    Options.presentation_screen = fields[2];
+                    break;
+                case "presenter-screen":
+                    Options.presenter_screen = fields[2];
                     break;
                 case "switch-screens":
                     bool switch_screens = bool.parse(fields[2]);

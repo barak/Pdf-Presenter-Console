@@ -70,9 +70,21 @@ namespace pdfpc {
         public static bool disable_cache_compression = false;
 
         /**
+         * Config option to enable a workaround for fullscreen window placement
+         * (needed for some WM's, e.g., fvwm)
+         */
+        public static bool move_on_mapped = false;
+
+        /**
+         * Config option to disable detection of tablet input type (pen|eraser)
+         */
+        public static bool disable_input_autodetection = false;
+
+        /**
          * Config option to disable scrolling events on the presenter window.
          */
         public static bool disable_scrolling = false;
+
         /**
          * Commandline option to persist the PNG cache to disk.
          */
@@ -153,14 +165,49 @@ namespace pdfpc {
         public static bool list_actions = false;
 
         /**
+         * Show the available monitors(s)
+         */
+        public static bool list_monitors = false;
+
+        /**
          * Position of notes on slides
          */
         public static string? notes_position = null;
 
         /**
+         * Screen to be used for the presentation (output name)
+         */
+        public static string? presentation_screen = null;
+
+        /**
+         * Screen to be used for the presenter (output name)
+         */
+        public static string? presenter_screen = null;
+
+        /**
          * Size of the presenter window
          */
         public static string? size = null;
+
+        /**
+         * Pointer color
+         */
+        public static string pointer_color = "red";
+
+        /**
+         * Pointer opacity (0 - 100)
+         */
+        public static int pointer_opacity = 50;
+
+        /**
+         * Pointer size
+         */
+        public static uint pointer_size = 10;
+
+        /**
+         * Try to automatically load video srt file
+         */
+        public static bool auto_srt = false;
 
         /**
          * Page which should be displayed after startup
@@ -177,6 +224,11 @@ namespace pdfpc {
          */
         public static string? pdfpc_location = null;
 
+        /**
+         * Test pdfpc without installation
+         */
+        public static bool no_install = false;
+
         public class BindTuple {
             public string type;
             public uint keyCode;
@@ -191,7 +243,8 @@ namespace pdfpc {
             }
 
             public void setActionArg(string? actionArg) throws ConfigFileError {
-                if (this.actionName != "setPenColor") {
+                if (this.actionName != "setPenColor" &&
+                    this.actionName != "switchMode") {
                     throw new ConfigFileError.INVALID_BIND("Only 'setPenColor' accepts an action argument");
                 }
 

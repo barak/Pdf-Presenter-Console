@@ -88,25 +88,31 @@ namespace pdfpc.Window {
         /**
          * The monitor number we want to show the window
          */
-        protected int screen_num_to_use;
+        protected int monitor_num_to_use;
 
-        public Fullscreen(int screen_num, int width = -1, int height = -1) {
-            if (screen_num >= 0) {
-                this.screen_num_to_use = screen_num;
-
+        public Fullscreen(int monitor_num, int width = -1, int height = -1) {
+            var display = Gdk.Display.get_default();
+            Gdk.Monitor monitor;
+            if (monitor_num >= 0) {
                 // Start in the given monitor
-                this.screen_to_use = Gdk.Screen.get_default();
+                monitor = display.get_monitor(monitor_num);
+                this.monitor_num_to_use = monitor_num;
+
+                this.screen_to_use = display.get_default_screen();
             } else {
                 // Start in the monitor the cursor is in
-                var device = Gdk.Display.get_default().get_default_seat().get_pointer();
+                var device = display.get_default_seat().get_pointer();
                 int pointerx, pointery;
-                device.get_position(out this.screen_to_use, out pointerx, out pointery);
+                device.get_position(out this.screen_to_use,
+                    out pointerx, out pointery);
 
-                this.screen_num_to_use = this.screen_to_use.get_monitor_at_point(pointerx, pointery);
+                monitor = display.get_monitor_at_point(pointerx, pointery);
+                // Shouldn't be used, just a safety precaution
+                this.monitor_num_to_use = 0;
             }
-            this.screen_to_use.get_monitor_geometry(this.screen_num_to_use, out this.screen_geometry);
+            this.screen_geometry = monitor.get_geometry();
 
-            this.gdk_scale = this.screen_to_use.get_monitor_scale_factor(this.screen_num_to_use);
+            this.gdk_scale = this.get_scale_factor();
             if (Pdfpc.is_Wayland_backend() && Options.wayland_workaround) {
                 // See issue 214. Wayland is doing some double scaling therefore
                 // we are lying about the actual screen size
@@ -127,13 +133,15 @@ namespace pdfpc.Window {
             this.overlay_layout.add_overlay(this.pointer_drawing_surface);
 
             this.video_surface.realize.connect(() => {
-                this.set_widget_event_pass_though(this.video_surface, true);
+                this.set_widget_event_pass_through(this.video_surface, true);
             });
             this.pen_drawing_surface.realize.connect(() => {
-                this.set_widget_event_pass_though(this.pen_drawing_surface, true);
+                this.set_widget_event_pass_through(this.pen_drawing_surface,
+                    true);
             });
             this.pointer_drawing_surface.realize.connect(() => {
-                this.set_widget_event_pass_though(this.pointer_drawing_surface, true);
+                this.set_widget_event_pass_through(this.pointer_drawing_surface,
+                    true);
             });
 
             this.pointer_drawing_surface.halign = Gtk.Align.FILL;
@@ -153,20 +161,26 @@ namespace pdfpc.Window {
             this.resizable = true;
 
             if (!Options.windowed) {
-                // start moving and fullscreening after the window was shown initially
-                this.map_event.connect(this.on_mapped);
+                if (Options.move_on_mapped) {
+                     // Some WM's ignore move requests made prior to
+                     // mapping the window
+                    this.map_event.connect(this.on_mapped);
+                } else {
+                    this.do_fullscreen();
+                }
             } else {
                 if (width > 0 && height > 0) {
-                        this.screen_geometry.width = width;
-                        this.screen_geometry.height = height;
+                    this.screen_geometry.width = width;
+                    this.screen_geometry.height = height;
                 } else {
-                        this.screen_geometry.width /= 2;
-                        this.screen_geometry.height /= 2;
+                    this.screen_geometry.width /= 2;
+                    this.screen_geometry.height /= 2;
                 }
                 this.resizable = false;
             }
 
-            this.set_size_request(this.screen_geometry.width, this.screen_geometry.height);
+            this.set_size_request(this.screen_geometry.width,
+                this.screen_geometry.height);
 
             this.add_events(Gdk.EventMask.POINTER_MOTION_MASK);
             this.motion_notify_event.connect(this.on_mouse_move);
@@ -176,34 +190,24 @@ namespace pdfpc.Window {
             this.restart_hide_cursor_timer();
         }
 
-        /**
-         * Move/fullscreen after the window was shown for the first time.
-         * Some WM ignore move requests before the window was shown initially so
-         * we wait until the window has been shown.
-         */
+        protected void do_fullscreen() {
+            // Wayland has no concept of global coordinates, so move() does not
+            // work there. The window is "somewhere", but we do not care,
+            // since the next call should fix it. For X11 and KWin/Plasma this
+            // does the right thing.
+            this.move(this.screen_geometry.x, this.screen_geometry.y);
+
+            // Specially for Wayland; just fullscreen() would do otherwise...
+            this.fullscreen_on_monitor(this.screen_to_use,
+                this.monitor_num_to_use);
+        }
+
         protected bool on_mapped(Gdk.EventAny event) {
             if (event.type != Gdk.EventType.MAP) {
                 return false;
             }
 
-            // move does not work on wayland sessions correctly, since wayland
-            // has no concept of global coordinates. For X11, this does the
-            // right thing.  On Wayland, the window is "somewhere", but we do
-            // not care, since the next call should fix it.
-            this.move(this.screen_geometry.x, this.screen_geometry.y);
-            #if GTK_LEGACY
-            // GTK version prior to 3.18 do not have fullscreen_on_monitor API.
-            // probably, they might have no wayland, so no problem to use just
-            // fullscreen()
-            this.fullscreen();
-            #else
-            // In wayland sessions we should end up on the correct monitor in
-            // fullscreen state. In X11, this API call is not implemented
-            // correctly until gtk 3.22. For X11 with gtk < 3.22, this call is
-            // just switching to fullscreen on the current screen. Since we
-            // moved it to the correct screen anyways, we should be safe here.
-            this.fullscreen_on_monitor(this.screen_to_use, this.screen_num_to_use);
-            #endif
+            this.do_fullscreen();
 
             return true;
         }
@@ -228,7 +232,8 @@ namespace pdfpc.Window {
                 Source.remove(this.hide_cursor_timeout);
             }
 
-            this.hide_cursor_timeout = Timeout.add_seconds(5, this.on_hide_cursor_timeout);
+            this.hide_cursor_timeout = Timeout.add_seconds(5,
+                this.on_hide_cursor_timeout);
         }
 
         /**
@@ -240,7 +245,9 @@ namespace pdfpc.Window {
 
             // Window might be null in case it has not been mapped
             if (this.get_window() != null) {
-                var cursor = new Gdk.Cursor.for_display(Gdk.Display.get_default(), Gdk.CursorType.BLANK_CURSOR);
+                var cursor =
+                    new Gdk.Cursor.for_display(Gdk.Display.get_default(),
+                        Gdk.CursorType.BLANK_CURSOR);
                 this.get_window().set_cursor(cursor);
 
                 // After the timeout disabled the cursor do not run it again
@@ -256,10 +263,11 @@ namespace pdfpc.Window {
         /**
          * Set the widget passthrough.
          *
-         * If set to true, the widget will not receive events and they will be forwarded to the
-         * underlying widgets within the Gtk.Overlay
+         * If set to true, the widget will not receive events and they will be
+         * forwarded to the underlying widgets within the Gtk.Overlay
          */
-        protected void set_widget_event_pass_though(Gtk.Widget w, bool pass_through) {
+        protected void set_widget_event_pass_through(Gtk.Widget w,
+            bool pass_through) {
             this.overlay_layout.set_overlay_pass_through(w, pass_through);
         }
     }

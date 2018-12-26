@@ -636,17 +636,21 @@ namespace pdfpc.Window {
                     button_panel.set_child_visible(!state);
 		});
 
+            tb = add_toolbox_button(button_panel, tbox_inverse, "empty.svg");
+            tb.clicked.connect(() => {
+		    this.presentation_controller.set_normal_mode();
+		});
             tb = add_toolbox_button(button_panel, tbox_inverse, "highlight.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.toggle_pointers();
+		    this.presentation_controller.set_pointer_mode();
 		});
             tb = add_toolbox_button(button_panel, tbox_inverse, "pen.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.toggle_pen_drawing();
+		    this.presentation_controller.set_pen_mode();
 		});
             tb = add_toolbox_button(button_panel, tbox_inverse, "eraser.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.toggle_eraser();
+		    this.presentation_controller.set_eraser_mode();
 		});
             tb = add_toolbox_button(button_panel, tbox_inverse, "snow.svg");
             tb.clicked.connect(() => {
@@ -697,29 +701,60 @@ namespace pdfpc.Window {
                 (int) Math.floor(allocation.height * 0.9));
         }
 
+       /**
+         * Load an (SVG) icon, replacing a substring in it in special cases
+         */
         protected Gtk.Image load_icon(string filename, int icon_height) {
-
             // attempt to load from a local path (if the user hasn't installed)
             // if that fails, attempt to load from the global path
-            string load_icon_path = Path.build_filename(Paths.SOURCE_PATH, "icons", filename);
-            File icon_file = File.new_for_path(load_icon_path);
-            if (!icon_file.query_exists()) {
+            string load_icon_path;
+            if (Options.no_install) {
+                load_icon_path = Path.build_filename(Paths.SOURCE_PATH, "icons",
+                    filename);
+            } else {
                 load_icon_path = Path.build_filename(Paths.ICON_PATH, filename);
             }
+            File icon_file = File.new_for_path(load_icon_path);
 
             Gtk.Image icon;
             try {
-                int width = (int) Math.floor(1.06 * icon_height) * this.gdk_scale;
-                int height = icon_height * this.gdk_scale;
+                int width = icon_height;
+                int height = icon_height;
 
-                Gdk.Pixbuf pixbuf = new Gdk.Pixbuf.from_file_at_size(load_icon_path, width, height);
-                Cairo.Surface surface = Gdk.cairo_surface_create_from_pixbuf(pixbuf, 0, null);
+                if (!Pdfpc.is_Wayland_backend()) {
+                    width *= this.gdk_scale;
+                    height *= this.gdk_scale;
+                }
+
+                Gdk.Pixbuf pixbuf;
+                if (filename == "highlight.svg") {
+                    uint8[] contents;
+                    string etag_out;
+                    icon_file.load_contents(null, out contents, out etag_out);
+
+                    string buf = (string) contents;
+                    buf = buf.replace("pointer_color", Options.pointer_color);
+
+                    MemoryInputStream stream =
+                        new MemoryInputStream.from_data(buf.data);
+
+                    pixbuf = new Gdk.Pixbuf.from_stream_at_scale(stream,
+                        width, height, true);
+                } else {
+                    pixbuf = new Gdk.Pixbuf.from_file_at_scale(load_icon_path,
+                        width, height, true);
+                }
+
+                Cairo.Surface surface =
+                    Gdk.cairo_surface_create_from_pixbuf(pixbuf, 0, null);
 
                 icon = new Gtk.Image.from_surface(surface);
                 icon.no_show_all = true;
             } catch (Error e) {
-                GLib.printerr("Warning: Could not load icon %s (%s)\n", load_icon_path, e.message);
-                icon = new Gtk.Image.from_icon_name("image-missing", Gtk.IconSize.LARGE_TOOLBAR);
+                GLib.printerr("Warning: Could not load icon %s (%s)\n",
+                    load_icon_path, e.message);
+                icon = new Gtk.Image.from_icon_name("image-missing",
+                    Gtk.IconSize.LARGE_TOOLBAR);
             }
             return icon;
         }
@@ -848,6 +883,11 @@ namespace pdfpc.Window {
          * Ask for the page to jump to
          */
         public void ask_goto_page() {
+            // Ignore events coming from the presentation view
+            if (!this.is_active) {
+                return;
+            }
+
             this.slide_progress.set_text("/%u".printf(this.presentation_controller.user_n_slides));
             this.slide_progress.sensitive = true;
             this.slide_progress.grab_focus();
@@ -887,6 +927,11 @@ namespace pdfpc.Window {
          * Edit a note. Basically give focus to notes_view
          */
         public void edit_note() {
+            // Ignore events coming from the presentation view
+            if (!this.is_active) {
+                return;
+            }
+
             // Disallow editing notes imported from PDF annotations
             int number = this.presentation_controller.current_user_slide_number;
             if (this.metadata.get_notes().is_note_read_only(number)) {
@@ -926,6 +971,11 @@ namespace pdfpc.Window {
         }
 
         public void show_overview() {
+            // Ignore events coming from the presentation view
+            if (!this.is_active) {
+                return;
+            }
+
             this.overview.current_slide = this.presentation_controller.current_user_slide_number;
             this.slide_stack.set_visible_child_name("overview");
             this.overview.ensure_focus();
