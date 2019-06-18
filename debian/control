@@ -2,7 +2,7 @@ Source: pdf-presenter-console
 Section: graphics
 Priority: optional
 Maintainer: Barak A. Pearlmutter <bap@debian.org>
-Build-Depends: debhelper (>= 11),
+Build-Depends: debhelper-compat (= 12),
 	       valac (>= 0.24),
 	       cmake (>= 3),
 	       libgee-0.8-dev,
