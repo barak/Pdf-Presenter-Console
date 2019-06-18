@@ -1,3 +1,10 @@
+pdf-presenter-console (4.3.2-2) unstable; urgency=medium
+
+  * Merge upstream video format fix
+  * Bump to debhelper 12
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 18 Jun 2019 11:35:04 +0100
+
 pdf-presenter-console (4.3.2-1) unstable; urgency=medium
 
   * New upstream release
