@@ -2,6 +2,20 @@
 pdfpc Changelog
 ===============
 
+Version 4.3.4
+=============
+
+*Released: June 2019*
+
+- Fix loading of key bindings
+
+Version 4.3.3
+=============
+
+*Released: June 2019*
+
+- Better video playback support on Mac OS X
+
 Version 4.3.2
 =============
 
