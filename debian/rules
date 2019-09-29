@@ -6,8 +6,5 @@ VALAFLAGS:=$(foreach w,$(CPPFLAGS) $(CFLAGS) $(LDFLAGS),-X $(w))
 %:
 	dh $@
 
-override_dh_auto_configure:
-	dh_auto_configure -- -DSYSCONFDIR=/etc
-
 override_dh_auto_test:
 	echo skipping dh_auto_test as it seems to go into infinite recursion
