@@ -1,11 +1,11 @@
-pdf-presenter-console (4.3.4-4) UNRELEASED; urgency=medium
+pdf-presenter-console (4.4.0-1) unstable; urgency=medium
 
   * Wrap long lines in changelog entries: 4.0.6-1.
   * Set upstream metadata fields: Bug-Database, Bug-Submit, Repository,
     Repository-Browse.
   * Update standards version to 4.5.0, no changes needed.
 
- -- Barak A. Pearlmutter <bap@debian.org>  Thu, 12 Mar 2020 17:34:03 +0000
+ -- Barak A. Pearlmutter <bap@debian.org>  Thu, 12 Mar 2020 17:47:43 +0000
 
 pdf-presenter-console (4.3.4-3) unstable; urgency=medium
 
