@@ -31,11 +31,6 @@ namespace pdfpc.Window {
      */
     public class Presentation : Fullscreen, Controllable {
         /**
-         * The registered PresentationController
-         */
-        public PresentationController presentation_controller { get; protected set; }
-
-        /**
          * The only view is the main view.
          */
         public View.Pdf main_view {
@@ -52,83 +47,52 @@ namespace pdfpc.Window {
         /**
          * Base constructor instantiating a new presentation window
          */
-        public Presentation(Metadata.Pdf metadata, int screen_num,
-            PresentationController presentation_controller, int width = -1, int height = -1) {
-            base(screen_num, width, height);
-            this.role = "presentation";
-            this.title = "pdfpc - presentation (%s)".printf(metadata.get_document().get_title());
+        public Presentation(PresentationController controller,
+            int screen_num, bool windowed, int width = -1, int height = -1) {
+            base(controller, false, screen_num, windowed, width, height);
 
-            this.destroy.connect((source) => presentation_controller.quit());
+            this.controller.reload_request.connect(this.on_reload);
+            this.controller.update_request.connect(this.update);
 
-            this.presentation_controller = presentation_controller;
-            this.presentation_controller.update_request.connect(this.update);
-
-            Gdk.Rectangle scale_rect;
-            this.view = new View.Pdf.from_metadata(
-                metadata, this.screen_geometry.width, this.screen_geometry.height, Metadata.Area.CONTENT,
-                Options.black_on_end, true, this.presentation_controller, this.gdk_scale, out scale_rect
-            );
-
-            if (!Options.disable_caching) {
-                this.view.get_renderer().cache = Renderer.Cache.create(metadata);
-            }
+            this.view = new View.Pdf.from_fullscreen(this,
+                Metadata.Area.CONTENT, true);
 
             this.overlay_layout.add(this.view);
 
-            this.overlay_layout.set_size_request(
-                this.main_view.get_renderer().width / this.gdk_scale,
-                this.main_view.get_renderer().height / this.gdk_scale
-            );
-
-            this.add(overlay_layout);
-
-            this.key_press_event.connect(this.presentation_controller.key_press);
-            this.button_press_event.connect(this.presentation_controller.button_press);
-            this.scroll_event.connect(this.presentation_controller.scroll);
-
-            this.presentation_controller.register_controllable(this);
+            // TODO: update the ratio on document reload
+            double ratio = metadata.get_page_width()/metadata.get_page_height();
+            var frame = new Gtk.AspectFrame(null, 0.5f, 0.5f,
+                (float) ratio, false);
+            frame.add(overlay_layout);
+            this.add(frame);
         }
 
         /**
-         * Set the presentation controller which is notified of keypresses and
-         * other observed events
+         * Called on document reload.
+         * TODO: in principle the document geometry may change!
          */
-        public void set_controller(PresentationController controller) {
-            this.presentation_controller = controller;
+        public void on_reload() {
+            this.view.invalidate();
         }
 
         /**
          * Update the display
          */
         public void update() {
-            this.visible = !this.presentation_controller.hidden;
+            this.visible = !this.controller.hidden;
 
-            if (this.presentation_controller.faded_to_black) {
-                this.view.fade_to_black();
-                return;
-            }
-            if (this.presentation_controller.frozen)
+            if (this.controller.frozen)
                 return;
 
-            try {
-                this.view.display(this.presentation_controller.current_slide_number, true);
-            } catch (Renderer.RenderError e) {
-                GLib.printerr("The pdf page %d could not be rendered: %s\n",
-                    this.presentation_controller.current_slide_number, e.message );
-                Process.exit(1);
+            bool old_disabled = this.view.disabled;
+            if (this.controller.faded_to_black) {
+                this.view.disabled = true;
+            } else {
+                this.view.disabled = false;
             }
-        }
 
-        /**
-         * Set the cache observer for the Views on this window
-         *
-         * This method takes care of registering all Prerendering Views used by
-         * this window correctly with the CacheStatus object to provide acurate
-         * cache status measurements.
-         */
-        public void set_cache_observer(CacheStatus observer) {
-            observer.monitor_view(this.view);
+            bool force = old_disabled != this.view.disabled;
+            this.view.display(this.controller.current_slide_number, force);
         }
     }
 }
-

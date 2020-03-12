@@ -45,10 +45,62 @@ namespace pdfpc {
          */
         public int current_slide_number { get; protected set; }
 
+        public void switch_to_slide_number(int slide_number, bool skip_history=false) {
+            if (slide_number == this.current_slide_number) {
+                // already there...
+                return;
+            }
+
+            int old_user_slide_number = this.current_user_slide_number;
+
+            if (slide_number < 0 || slide_number > this.n_slides) {
+                return;
+            } else if (slide_number == this.n_slides) {
+                if (Options.black_on_end) {
+                    this.faded_to_black = true;
+                }
+                // the correct last slide
+                slide_number--;
+            } else {
+                if (!this.frozen) {
+                    this.faded_to_black = false;
+                }
+            }
+
+            if (!skip_history) {
+                if (this.history_bck.is_empty ||
+                    this.history_bck.peek_head() != this.current_slide_number) {
+                    this.history_bck.offer_head(this.current_slide_number);
+                }
+
+                // moving not along the history path; clear forward history
+                this.history_fwd.clear();
+            }
+
+            this.current_slide_number = slide_number;
+
+            // start the timer unless it's the initial positioning
+            if (!this.history_bck.is_empty) {
+                this.timer.start();
+            }
+
+            // clear the highlighted selection when switching to a new page
+            if (this.current_user_slide_number != old_user_slide_number) {
+                highlight_w = 0;
+                highlight_h = 0;
+            }
+
+            this.controllables_update();
+        }
+
         /**
-         * The current slide in "user indexes"
+         * The current slide in "user indices"
          */
-        public int current_user_slide_number { get; protected set; }
+        public int current_user_slide_number {
+            get {
+                return this.metadata.real_slide_to_user_slide(this.current_slide_number);
+            }
+        }
 
         /**
          * Stores if the view is faded to black
@@ -68,7 +120,11 @@ namespace pdfpc {
         /**
          * The number of slides in the presentation
          */
-        public int n_slides { get; protected set; }
+        public uint n_slides {
+            get {
+                return this.metadata.get_slide_count();
+            }
+        }
 
         /**
          * The number of user slides
@@ -91,13 +147,14 @@ namespace pdfpc {
             set {
                 _presenter = value;
                 if (value != null) {
-                    presenter.current_view.size_allocate.connect(init_presenter_pen_and_pointer);
+                    this.register_controllable(value);
+
+                    this.init_pen_and_pointer();
+                    this.register_mouse_handlers();
                 }
             }
         }
         private Window.Presenter _presenter=null;
-
-
 
         /**
          * Window which shows the current slide in fullscreen
@@ -111,16 +168,19 @@ namespace pdfpc {
             set {
                 _presentation = value;
                 if (value != null) {
-                    presentation.main_view.size_allocate.connect(init_presentation_pen_and_pointer);
+                    this.register_controllable(value);
                 }
             }
         }
         private Window.Presentation _presentation=null;
-        public Gtk.Image presenter_pointer;
-        public Gtk.Image presentation_pointer;
 
-        public Gtk.DrawingArea? presenter_pointer_surface;
-        public Gtk.DrawingArea? presentation_pointer_surface;
+        private bool single_screen_mode {
+            get {
+                return (this._presentation == null ||
+                        this._presenter == null ||
+                        !this._presentation.is_monitor_connected());
+            }
+        }
 
         /**
          * Key modifiers that we support
@@ -132,6 +192,11 @@ namespace pdfpc {
          */
         public bool ignore_keyboard_events { get; protected set; default = false; }
         public bool ignore_mouse_events { get; protected set; default = false; }
+
+        /**
+         * Signal: Fired on document reload
+         */
+        public signal void reload_request();
 
         /**
          * Signal: Update the display
@@ -169,13 +234,6 @@ namespace pdfpc {
         public signal void decrease_font_size_request();
 
         /**
-         * A flag signaling if we allow for a black slide at the end. Tis is
-         * useful for the next view and (for some presenters) also for the main
-         * view.
-         */
-        protected bool black_on_end;
-
-        /**
          * Controllables which are registered with this presentation controller.
          */
         protected Gee.List<Controllable> controllables;
@@ -183,29 +241,54 @@ namespace pdfpc {
         /**
          * The metadata of the presentation
          */
-        protected Metadata.Pdf metadata;
+        private Metadata.Pdf _metadata;
+        public Metadata.Pdf metadata {
+            get {
+                return _metadata;
+            }
+            set {
+                _metadata = value;
+                if (value != null) {
+                    this.metadata.controller = this;
+
+                    this.timer = getTimerLabel(this,
+                        (int) metadata.get_duration() * 60,
+                        metadata.start_time, metadata.end_time);
+                    this.timer.reset();
+
+                    this.current_slide_number = 0;
+
+                    this.pen_drawing = Drawings.create(metadata);
+                    current_pen_drawing_tool = pen_drawing.pen;
+                }
+            }
+        }
 
         /**
          * The presenters overview. We need to communicate with it for toggling
          * skips
          */
         protected Window.Overview overview;
-        protected bool overview_shown = false;
+        protected bool overview_shown {
+            get {
+                if (presenter == null) {
+                    return false;
+                } else {
+                    return presenter.is_overview_shown();
+                }
+            }
+        }
 
         /**
-         * Disables processing of multiple Keypresses at the same time (debounce)
+         * Timestamp of the last key event
          */
-        protected uint last_key_event = 0;
+        protected uint last_key_ev_time = 0;
 
         /**
-         * Stores the "history" of the slides (jumps only)
+         * Store the backward/forward "history" of the slides
          */
-        private Gee.ArrayQueue<int> history;
-
-        /**
-         * Progress tracking for user slides
-         */
-        protected int[] user_slide_progress;
+        private Gee.ArrayQueue<int> history_bck;
+        private Gee.ArrayQueue<int> history_fwd;
 
         /**
          * Timer for the presentation. It should only be displayed on one view.
@@ -216,6 +299,23 @@ namespace pdfpc {
         protected delegate void callback();
         protected delegate void callback_with_parameter(GLib.Variant? parameter);
         protected SimpleActionGroup action_group = new SimpleActionGroup();
+
+        protected class ActionDescription : GLib.Object {
+            public string name { get; set; }
+            public string description { get; set; }
+            public string arg_name { get; set; }
+            public Gee.ArrayList<KeyDef> bindings { get; set; }
+
+            public ActionDescription(string name, string description,
+                string? arg_name = null) {
+                this.name = name;
+                this.description = description;
+                this.arg_name = arg_name;
+            }
+        }
+
+        protected Gee.ArrayList<ActionDescription> action_descriptions =
+            new Gee.ArrayList<ActionDescription>();
 
         protected class KeyDef : GLib.Object, Gee.Hashable<KeyDef> {
             public uint keycode { get; set; }
@@ -241,21 +341,21 @@ namespace pdfpc {
         protected class ActionAndParameter : GLib.Object {
             public GLib.Action action { get; set; }
             public GLib.Variant? parameter { get; set; }
+            public string name { get; set; }
 
-            public ActionAndParameter(GLib.Action action, GLib.Variant? parameter) {
+            public ActionAndParameter(GLib.Action action,
+                GLib.Variant? parameter, string name) {
                 this.action = action;
                 this.parameter = parameter;
+                this.name = name;
             }
         }
 
-        protected Gee.HashMap<KeyDef, ActionAndParameter> keyBindings = new Gee.HashMap<KeyDef, ActionAndParameter>();
+        protected Gee.HashMap<KeyDef, ActionAndParameter> keyBindings =
+            new Gee.HashMap<KeyDef, ActionAndParameter>();
         // We abuse the KeyDef structure
-        protected Gee.HashMap<KeyDef, ActionAndParameter> mouseBindings = new Gee.HashMap<KeyDef, ActionAndParameter>();
-
-        /*
-         * "Main" view of current slide
-         */
-        public View.Pdf main_view = null;
+        protected Gee.HashMap<KeyDef, ActionAndParameter> mouseBindings =
+            new Gee.HashMap<KeyDef, ActionAndParameter>();
 
         /**
          * DBus interface to screensaver
@@ -297,38 +397,28 @@ namespace pdfpc {
         /**
          * Instantiate a new controller
          */
-        public PresentationController(Metadata.Pdf metadata, bool allow_black_on_end) {
-            this.metadata = metadata;
-            this.metadata.controller = this;
-            this.black_on_end = allow_black_on_end;
-
+        public PresentationController() {
             this.controllables = new Gee.ArrayList<Controllable>();
 
-            this.history = new Gee.ArrayQueue<int>();
-            this.user_slide_progress = new int[metadata.get_user_slide_count()];
-
-            // If end_time is set, reset duration to 0
-            if (Options.end_time != null) {
-                Options.duration = 0;
-                this.metadata.set_duration(0);
-            }
-            this.timer = getTimerLabel(this,
-                (int) this.metadata.get_duration() * 60);
-            this.timer.reset();
-
-            this.n_slides = (int) this.metadata.get_slide_count();
-
-            this.current_slide_number = 0;
-            this.current_user_slide_number = 0;
+            this.history_bck = new Gee.ArrayQueue<int>();
+            this.history_fwd = new Gee.ArrayQueue<int>();
 
             this.add_actions();
 
-            Bus.get_proxy.begin<ScreenSaver>(BusType.SESSION, "org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver", 0, null, (obj, res) => {
+            readKeyBindings();
+            readMouseBindings();
+
+            Bus.get_proxy.begin<ScreenSaver>(BusType.SESSION,
+                "org.freedesktop.ScreenSaver",
+                "/org/freedesktop/ScreenSaver",
+                0, null, (obj, res) => {
                 try {
                     this.screensaver = Bus.get_proxy.end(res);
-                    this.screensaver.inhibit.begin("pdfpc", "Showing a presentation", (obj, res) => {
+                    this.screensaver.inhibit.begin("pdfpc",
+                        "Showing a presentation", (obj, res) => {
                         try {
-                            this.screensaver_cookie = this.screensaver.inhibit.end(res);
+                            this.screensaver_cookie =
+                                this.screensaver.inhibit.end(res);
                             GLib.print("Screensaver inhibited\n");
                         } catch (GLib.Error error) {
                             // pass
@@ -339,92 +429,22 @@ namespace pdfpc {
                 }
             });
 
-            readKeyBindings();
-            readMouseBindings();
-
-
-            DBusServer.start_server(this, this.metadata);
+            DBusServer.start_server(this);
         }
 
-        /* pen drawing widgets */
-        public Gtk.DrawingArea? presenter_pen_surface;
-        public Gtk.DrawingArea? presentation_pen_surface;
-
         public Drawings.Drawing pen_drawing;
-        private Drawings.DrawingTool? current_pen_drawing_tool = null;
+        public Drawings.DrawingTool? current_pen_drawing_tool = null;
 
         /* pen drawing state */
         private bool pen_drawing_present = false;
 
         private uint pen_step = 2;
-        private double pen_last_x;
-        private double pen_last_y;
+        public double pen_last_x;
+        public double pen_last_y;
         private bool pen_is_pressed = false;
 
-        protected void init_pen_drawing_if_needed(Gtk.Allocation a) {
-            if (this.pen_drawing == null) {
-                this.pen_drawing = Drawings.create(metadata,
-                                                   a.width,
-                                                   a.height);
-                current_pen_drawing_tool = pen_drawing.pen;
-            }
-        }
-
-        protected void init_presentation_pen() {
-            init_pen_drawing_if_needed(presentation_allocation);
-            this.presentation_pen_surface = presentation.pen_drawing_surface;
-            this.presentation_pen_surface.hide();
-            this.presentation_pen_surface.draw.connect ((context) => {
-                draw_pen_surface(context, presentation_allocation, false);
-                return true;
-            });
-        }
-
-        protected void init_presenter_pen() {
-            init_pen_drawing_if_needed(presenter_allocation);
-            this.presenter_pen_surface = presenter.pen_drawing_surface;
-            this.presenter_pen_surface.hide();
-
-            this.presenter_pen_surface.set_events(
-                  Gdk.EventMask.BUTTON_PRESS_MASK
-                | Gdk.EventMask.BUTTON_RELEASE_MASK
-                | Gdk.EventMask.POINTER_MOTION_MASK
-            );
-
-            this.presenter_pen_surface.draw.connect ((context) => {
-                draw_pen_surface(context, presenter_allocation, true);
-                return true;
-            });
-
-            this.presenter_pen_surface.button_press_event.connect((event) => {
-                if (in_drawing_mode()) {
-                    move_pen(
-                        event.x / presenter_allocation.width,
-                        event.y / presenter_allocation.height
-                    );
-                    pen_is_pressed = true;
-                    return true;
-                } else {
-                    return false;
-                }
-            });
-
-            this.presenter_pen_surface.button_release_event.connect((event) => {
-                if (in_drawing_mode()) {
-                    move_pen(
-                        event.x / presenter_allocation.width,
-                        event.y / presenter_allocation.height
-                    );
-                    pen_is_pressed = false;
-                    return true;
-                } else {
-                    return false;
-                }
-            });
-
-            this.presenter_pen_surface.motion_notify_event.connect(on_move_pen);
-
-            this.update_request.connect(this.update_pen_drawing);
+        public bool is_pointer_active() {
+            return this.annotation_mode == AnnotationMode.POINTER;
         }
 
         public bool is_eraser_active() {
@@ -435,7 +455,7 @@ namespace pdfpc {
             return annotation_mode == AnnotationMode.PEN;
         }
 
-        protected bool in_drawing_mode() {
+        public bool in_drawing_mode() {
             return is_eraser_active() || is_pen_active();
         }
 
@@ -476,90 +496,57 @@ namespace pdfpc {
             return current_pen_drawing_tool.width;
         }
 
+        private void set_pen_pressure(double pressure) {
+            current_pen_drawing_tool.pressure = pressure;
+        }
+
         public void queue_pen_surface_draws() {
             if (presenter != null) {
-                presenter_pen_surface.queue_draw();
+                presenter.pen_drawing_surface.queue_draw();
             }
             if (presentation != null) {
-                presentation_pen_surface.queue_draw();
+                presentation.pen_drawing_surface.queue_draw();
             }
         }
 
         protected void update_pen_drawing() {
-            pen_drawing.switch_to_slide(
-                this.metadata.user_slide_to_real_slide(this.current_user_slide_number)
-            );
+            pen_drawing.switch_to_slide(this.current_slide_number);
             this.queue_pen_surface_draws();
-        }
-
-        protected bool on_move_pen(Gtk.Widget source, Gdk.EventMotion move) {
-            if (!Options.disable_input_autodetection) {
-                Gdk.InputSource source_type =
-                    move.get_source_device().get_source();
-                if (source_type == Gdk.InputSource.ERASER) {
-                    this.set_mode(AnnotationMode.ERASER);
-                } else if (source_type == Gdk.InputSource.PEN) {
-                    this.set_mode(AnnotationMode.PEN);
-                }
-            }
-
-            if (in_drawing_mode()) {
-                move_pen(move.x/presenter_allocation.width,
-                         move.y/presenter_allocation.height);
-            }
-            return true;
-        }
-
-        protected void draw_pen_surface(Cairo.Context context, Gtk.Allocation a, bool for_presenter) {
-            if (pen_drawing != null) {
-                Cairo.Surface? drawing_surface = pen_drawing.render_to_surface();
-                int x = (int)(a.width*pen_last_x);
-                int y = (int)(a.height*pen_last_y);
-                int base_width = pen_drawing.width;
-                int base_height = pen_drawing.height;
-                Cairo.Matrix old_xform = context.get_matrix();
-                context.scale(
-                    (double) a.width / base_width,
-                    (double) a.height / base_height
-                );
-                context.set_source_surface(drawing_surface, 0, 0);
-                context.paint();
-                context.set_matrix(old_xform);
-                if (for_presenter && in_drawing_mode()) {
-                    double width_adjustment = (double) a.width / base_width;
-                    context.set_operator(Cairo.Operator.OVER);
-                    context.set_line_width(2.0);
-                    context.set_source_rgba(
-                        current_pen_drawing_tool.red,
-                        current_pen_drawing_tool.green,
-                        current_pen_drawing_tool.blue,
-                        1.0
-                    );
-                    double arc_radius = current_pen_drawing_tool.width * width_adjustment / 2.0;
-                    if (arc_radius < 1.0) {
-                        arc_radius = 1.0;
-                    }
-                    context.arc(x, y, arc_radius, 0, 2*Math.PI);
-                    context.stroke();
-                }
-            }
         }
 
         private void hide_or_show_pen_surfaces() {
             if (pen_drawing_present) {
                 if (presenter != null) {
-                    presenter_pen_surface.show();
+                    presenter.enable_pen(true);
                 }
                 if (presentation != null) {
-                    presentation_pen_surface.show();
+                    presentation.enable_pen(true);
                 }
                 queue_pen_surface_draws();
             } else {
                 if (presenter != null) {
-                    presenter_pen_surface.hide();
+                    presenter.enable_pen(false);
                 }
                 if (presentation != null) {
-                    presentation_pen_surface.hide();
+                    presentation.enable_pen(false);
+                }
+            }
+        }
+
+        private void hide_or_show_pointer_surfaces() {
+            if (this.annotation_mode == AnnotationMode.POINTER) {
+                if (presenter != null) {
+                    presenter.enable_pointer(true);
+                }
+                if (presentation != null) {
+                    presentation.enable_pointer(true);
+                }
+            } else {
+                if (presenter != null) {
+                    presenter.enable_pointer(false);
+                }
+                if (presentation != null) {
+                    presentation.enable_pointer(false);
                 }
             }
         }
@@ -592,35 +579,14 @@ namespace pdfpc {
             }
 
             // Update pointer surfaces
-            if (this.annotation_mode == AnnotationMode.POINTER) {
-                if (presenter != null) {
-                    presenter_pointer_surface.show();
-                }
-                if (presentation != null) {
-                    presentation_pointer_surface.show();
-                }
-            } else {
-                if (presenter != null) {
-                    presenter_pointer_surface.hide();
-                }
-                if (presentation != null) {
-                    presentation_pointer_surface.hide();
-                }
-            }
+            hide_or_show_pointer_surfaces();
 
             // Update drawing surfaces
             hide_or_show_pen_surfaces();
 
             if (this.presenter != null) {
                 // Disable event compression for smoother drawing
-                this.presenter.get_window().set_event_compression(!in_drawing_mode());
-
-                // When drawing mode is inactive, make the drawing surface
-                // transparent to the input events
-                var w = presenter_pen_surface.get_window();
-                if (w != null) {
-                    w.set_pass_through(!in_drawing_mode());
-                }
+                this.presenter.main_view.get_window().set_event_compression(!in_drawing_mode());
             }
 
             this.controllables_update();
@@ -658,20 +624,7 @@ namespace pdfpc {
             }
         }
 
-
-        private Gtk.Allocation presenter_allocation;
-        private Gtk.Allocation presentation_allocation;
-
-        private void init_presentation_pen_and_pointer(Gtk.Allocation a) {
-            presentation_allocation = a;
-            init_presentation_pen();
-            init_presentation_pointer();
-        }
-
-        private void init_presenter_pen_and_pointer(Gtk.Allocation a) {
-            presenter_allocation = a;
-            init_presenter_pen();
-            init_presenter_pointer();
+        private void init_pen_and_pointer() {
             pointer_size = Options.pointer_size;
             if (pointer_size > 500) {
                 pointer_size = 500;
@@ -686,142 +639,201 @@ namespace pdfpc {
             } else {
                 pointer_color.alpha = 1.0;
             }
+
+            this.update_request.connect(this.update_pen_drawing);
         }
 
-        private uint pointer_size;
+        public uint pointer_size;
         private uint pointer_step = 5;
-        private Gdk.RGBA pointer_color;
+        public Gdk.RGBA pointer_color;
 
-        private double highlight_x;
-        private double highlight_y;
-        private double highlight_w;
-        private double highlight_h;
-        private double drag_x;
-        private double drag_y;
-        private double pointer_x;
-        private double pointer_y;
+        /**
+         * Hide drawing custom pointer (pointer/pen/eraser) when mouse leaves
+         * the main view
+         */
+        public bool pointer_hidden = true;
 
-        public bool is_pointer_active() {
-            return this.annotation_mode == AnnotationMode.POINTER;
-        }
+        /**
+         * Timer id to hide the pointer after a period of inactivity
+         */
+        protected uint pointer_timeout_id = 0;
 
-        protected void init_presenter_pointer() {
-            this.presenter_pointer_surface = presenter.pointer_drawing_surface;
-            this.presenter_pointer_surface.hide();
+        /**
+         * Normalized coordinates (0 .. 1), i.e. mapped to a unity square
+         */
+        public double highlight_x;
+        public double highlight_y;
+        public double highlight_w;
+        public double highlight_h;
+        public double drag_x = -1;
+        public double drag_y = -1;
+        public double pointer_x;
+        public double pointer_y;
 
-            this.presenter_pointer_surface.draw.connect ((context) => {
-                draw_pointer(context, presenter_allocation);
-                return true;
-            });
+        /**
+         * Convert device coordinates to normalized ones
+         */
+        private void device_to_normalized(double dev_x, double dev_y,
+            out double x, out double y) {
+            var view = this.presenter.main_view;
+            Gtk.Allocation a;
+            view.get_allocation(out a);
 
-            drag_x=-1;
-            drag_y=-1;
-            this.presenter_pointer_surface.button_press_event.connect((event) => {
-                drag_x=event.x/presenter_allocation.width;
-                drag_y=event.y/presenter_allocation.height;
-                highlight_w=0;
-                highlight_h=0;
-
-                return true;
-            });
-            this.presenter_pointer_surface.button_release_event.connect((event) => {
-                update_highlight(event.x/presenter_allocation.width, event.y/presenter_allocation.height);
-                drag_x=-1;
-                drag_y=-1;
-
-                return true;
-            });
-
-            this.presenter_pointer_surface.motion_notify_event.connect(on_move_pointer);
-
-            this.presenter_pointer_surface.set_events(
-                  Gdk.EventMask.BUTTON_PRESS_MASK
-                | Gdk.EventMask.BUTTON_RELEASE_MASK
-                | Gdk.EventMask.POINTER_MOTION_MASK
-            );
-
-            var w = presenter_pointer_surface.get_window();
-            if (w != null) {
-                w.set_cursor(new Gdk.Cursor.from_name(Gdk.Display.get_default(), "none"));
-            }
-        }
-
-        protected void init_presentation_pointer() {
-            this.presentation_pointer_surface = presentation.pointer_drawing_surface;
-            this.presentation_pointer_surface.hide();
-
-            this.presentation_pointer_surface.draw.connect ((context) => {
-                draw_pointer(context, presentation_allocation);
-                return true;
-            });
+            x = dev_x/a.width;
+            y = dev_y/a.height;
         }
 
         private void queue_pointer_surface_draws() {
             if (presenter != null) {
-                presenter_pointer_surface.queue_draw();
+                presenter.pointer_drawing_surface.queue_draw();
             }
             if (presentation != null) {
-                presentation_pointer_surface.queue_draw();
+                presentation.pointer_drawing_surface.queue_draw();
             }
         }
 
-        public void move_pointer(double percent_x, double percent_y) {
-            pointer_y = percent_y;
-            pointer_x = percent_x;
-            if (presenter != null) {
-                presenter_pointer_surface.queue_draw();
-            }
-            if (presentation != null) {
-                presentation_pointer_surface.queue_draw();
-            }
+        protected void register_mouse_handlers() {
+            var view = presenter.main_view;
+            view.set_events(
+                  Gdk.EventMask.BUTTON_PRESS_MASK
+                | Gdk.EventMask.BUTTON_RELEASE_MASK
+                | Gdk.EventMask.POINTER_MOTION_MASK
+                | Gdk.EventMask.ENTER_NOTIFY_MASK
+                | Gdk.EventMask.LEAVE_NOTIFY_MASK
+            );
+
+            view.motion_notify_event.connect(on_motion);
+            view.button_press_event.connect(on_button_press);
+            view.button_release_event.connect(on_button_release);
+            view.enter_notify_event.connect(() => {
+                    this.pointer_hidden = false;
+                    return true;
+                });
+            view.leave_notify_event.connect(() => {
+                    this.pointer_hidden = true;
+                    // make sure the pointer is cleared
+                    if (this.is_pointer_active()) {
+                        this.queue_pointer_surface_draws();
+                    } else if (this.in_drawing_mode()) {
+                        this.queue_pen_surface_draws();
+                    }
+                    return true;
+                });
         }
 
         /**
-         * Handle mouse scrolling events on the window and, if neccessary send
+         * Handle mouse events on the window and, if necessary send
          * them to the presentation controller
          */
-        protected bool on_move_pointer(Gtk.Widget source, Gdk.EventMotion move) {
-            move_pointer(move.x / (double) presenter_allocation.width, move.y / (double) presenter_allocation.height);
-            update_highlight(move.x/presenter_allocation.width, move.y/presenter_allocation.height);
+        private bool on_motion(Gdk.EventMotion event) {
+            if (this.annotation_mode == AnnotationMode.POINTER) {
+                return on_move_pointer(event);
+            } else if (this.in_drawing_mode()) {
+                return on_move_pen(event);
+            } else {
+                return false;
+            }
+        }
+
+        private bool on_button_press(Gdk.EventButton event) {
+            if (this.annotation_mode == AnnotationMode.POINTER) {
+                this.device_to_normalized(event.x, event.y,
+                    out drag_x, out drag_y);
+                highlight_w = 0;
+                highlight_h = 0;
+                return true;
+            } else if (this.in_drawing_mode()) {
+                double x, y;
+                this.device_to_normalized(event.x, event.y, out x, out y);
+                move_pen(x, y);
+                pen_is_pressed = true;
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        private bool on_button_release(Gdk.EventButton event) {
+            if (this.annotation_mode == AnnotationMode.POINTER) {
+                double x, y;
+                this.device_to_normalized(event.x, event.y, out x, out y);
+                update_highlight(x, y);
+                drag_x = -1;
+                drag_y = -1;
+                return true;
+            } else if (this.in_drawing_mode()) {
+                double x, y;
+                this.device_to_normalized(event.x, event.y, out x, out y);
+                move_pen(x, y);
+                pen_is_pressed = false;
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        private bool on_move_pen(Gdk.EventMotion event) {
+            var dev = event.get_source_device();
+            if (!Options.disable_input_autodetection) {
+                Gdk.InputSource source_type = dev.get_source();
+                if (source_type == Gdk.InputSource.ERASER) {
+                    this.set_mode(AnnotationMode.ERASER);
+                } else if (source_type == Gdk.InputSource.PEN) {
+                    this.set_mode(AnnotationMode.PEN);
+                }
+            }
+
+            if (!Options.disable_input_pressure && pen_is_pressed) {
+                double pressure;
+                if (dev.get_axis(event.axes, Gdk.AxisUse.PRESSURE,
+                    out pressure) != true) {
+                    pressure = -1.0;
+                }
+                set_pen_pressure(pressure);
+            }
+
+            double x, y;
+            this.device_to_normalized(event.x, event.y, out x, out y);
+            move_pen(x, y);
+
             return true;
         }
 
-        protected void update_highlight(double x, double y) {
+        protected void restart_pointer_timer() {
+            if (this.pointer_timeout_id != 0) {
+                Source.remove(this.pointer_timeout_id);
+            }
+
+            this.pointer_timeout_id = Timeout.add_seconds(2, () => {
+                    this.pointer_timeout_id = 0;
+                    this.pointer_hidden = true;
+                    this.queue_pointer_surface_draws();
+
+                    return false;
+                });
+        }
+
+        private bool on_move_pointer(Gdk.EventMotion event) {
+            this.device_to_normalized(event.x, event.y,
+                out pointer_x, out pointer_y);
+
+            // restart the pointer timeout timer
+            this.restart_pointer_timer();
+            this.pointer_hidden = false;
+
+            this.queue_pointer_surface_draws();
+            this.update_highlight(pointer_x, pointer_y);
+
+            return true;
+        }
+
+        private void update_highlight(double x, double y) {
             if (drag_x!=-1) {
                 highlight_w=Math.fabs(drag_x-x);
                 highlight_h=Math.fabs(drag_y-y);
                 highlight_x=(drag_x<x?drag_x:x);
                 highlight_y=(drag_y<y?drag_y:y);
                 queue_pointer_surface_draws();
-            }
-        }
-
-        protected void draw_pointer(Cairo.Context context, Gtk.Allocation a) {
-            // Draw the highlighted area, but ignore very short drags
-            // made unintentionally by mouse clicks
-            if (highlight_w > 0.01 && highlight_h > 0.01) {
-                context.rectangle(0,0,a.width, a.height);
-                context.new_sub_path();
-                context.rectangle((int)(highlight_x*a.width), (int)(highlight_y*a.height), (int)(highlight_w*a.width), (int)(highlight_h*a.height));
-
-                context.set_fill_rule (Cairo.FillRule.EVEN_ODD);
-                context.set_source_rgba(0,0,0,0.5);
-                context.fill_preserve();
-
-                context.new_path();
-            }
-            // Draw the pointer when not dragging
-            if (drag_x == -1) {
-                int x = (int)(a.width*pointer_x);
-                int y = (int)(a.height*pointer_y);
-                int r = (int)(a.height*0.001*pointer_size);
-
-                context.set_source_rgba(pointer_color.red,
-                                        pointer_color.green,
-                                        pointer_color.blue,
-                                        pointer_color.alpha);
-                context.arc(x, y, r, 0, 2*Math.PI);
-                context.fill();
             }
         }
 
@@ -836,6 +848,40 @@ namespace pdfpc {
             queue_pointer_surface_draws();
         }
 
+        /**
+         * Executes the script specified with --external-script.
+         * The script is called with the following parameters:
+         * - name of pdf file
+         * - total slide count
+         * - current slide number
+         * - current user slide number
+         *
+         * If the script exits with a non-zero return value, whatever
+         * the script wrote to stdout is printed in the console.
+         */ 
+        public void execute_external_script() {
+            if (Options.external_script == "none") {
+                return;
+            }
+
+            string scriptname = Options.external_script;
+            GLib.print("Executing external script\n");
+            
+            string std_out;
+            int exit_status;
+
+            string pdfname = get_pdf_fname();
+            try {
+                Process.spawn_command_line_sync (
+                    @"$scriptname $pdfname $n_slides $(current_slide_number+1) $(current_user_slide_number+1)",
+                    out std_out, null, out exit_status);
+                if (exit_status != 0) {
+                    GLib.print(@"Script returned $exit_status.\n$std_out\n");
+                }
+            } catch (SpawnError e) {
+                GLib.print(@"Error: $(e.message)\n");
+            }
+        }
 
         /*
          * Inform metadata of quit, and then quit.
@@ -871,148 +917,273 @@ namespace pdfpc {
         }
 
         protected void add_actions() {
-            add_action_with_parameter("switchMode", GLib.VariantType.STRING,
-                this.set_mode_to_string);
-            add_action("clearDrawing", this.clear_pen_drawing);
-            add_action("toggleDrawings", this.toggle_drawings);
+            add_action("next", this.next_page,
+                "Go to the next slide");
+            add_action("next10", this.jump10,
+                "Jump 10 slides forward");
+            add_action("lastOverlay", this.jump_to_last_overlay,
+                "Jump to the last overlay of the current slide");
+            add_action("nextOverlay", this.next_user_page,
+                "Jump forward outside of the current overlay");
+            add_action("prev", this.previous_page,
+                "Go to the previous slide");
+            add_action("prev10", this.back10,
+                "Jump 10 slides back");
+            add_action("firstOverlay", this.jump_to_first_overlay,
+                "Jump to the first overlay of the current slide");
+            add_action("prevOverlay", this.previous_user_page,
+                "Jump back outside of the current overlay");
 
-            add_action_with_parameter("setPenColor", GLib.VariantType.STRING,
-                this.set_pen_color_to_string);
+            add_action("goto", this.controllables_ask_goto_page,
+                "Ask for a page to jump to");
+            add_action("gotoFirst", this.goto_first,
+                "Jump to the first slide");
+            add_action("gotoLast", this.goto_last,
+                "Jump to the last slide");
+            add_action("nextUnseen", this.next_unseen,
+                "Jump to the next unseen slide");
+            add_action("prevSeen", this.previous_seen,
+                "Jump to the last previously seen slide");
+            add_action("overview", this.toggle_overview,
+                "Show the overview mode");
+            add_action("histBack", this.history_goto_back,
+                "Go back in history");
+            add_action("histFwd", this.history_goto_fwd,
+                "Go forward in history");
+            add_action_with_parameter("gotoPage", GLib.VariantType.STRING,
+                this.goto_string,
+                "Jump to the specified page", "number");
 
-            add_action("next", this.next_page);
-            add_action("next10", this.jump10);
-            add_action("lastOverlay", this.jump_to_last_overlay);
-            add_action("nextOverlay", this.next_user_page);
-            add_action("prev", this.previous_page);
-            add_action("prev10", this.back10);
-            add_action("firstOverlay", this.jump_to_first_overlay);
-            add_action("prevOverlay", this.previous_user_page);
-            add_action("prevSeen", this.previous_seen);
-            add_action("nextUnseen", this.next_unseen);
+            add_action("start", this.start,
+                "Start the timer");
+            add_action("pause", this.toggle_pause,
+                "Pause the timer");
+            add_action("resetTimer", this.reset_timer,
+                "Reset the timer");
 
-            add_action("goto", this.controllables_ask_goto_page);
-            add_action("gotoFirst", this.goto_first);
-            add_action("gotoLast", this.goto_last);
-            add_action("overview", this.toggle_overview);
-            add_action("histBack", this.history_back);
+            add_action("windowed", this.toggle_windowed,
+                "Toggle the windowed state");
 
-            add_action("start", this.start);
-            add_action("pause", this.toggle_pause);
-            add_action("resetTimer", this.reset_timer);
-
-            add_action("blank", this.fade_to_black);
-            add_action("freeze", this.toggle_freeze);
+            add_action("blank", this.fade_to_black,
+                "Blank the presentation screen");
+            add_action("hide", this.hide_presentation,
+                "Hide the presentation screen");
+            add_action("freeze", this.toggle_freeze,
+                "Toggle freeze the presentation screen");
             add_action("freezeOn", () => {
                 if (!this.frozen)
                     this.toggle_freeze();
-                });
-            add_action("hide", this.hide_presentation);
+                },
+                "Freeze the presentation screen");
 
-            add_action("overlay", this.toggle_skip);
-            add_action("note", this.controllables_edit_note);
-            add_action("endSlide", this.set_end_user_slide);
-            add_action("saveBookmark", this.set_last_saved_slide);
-            add_action("loadBookmark", this.goto_last_saved_slide);
+            add_action("overlay", this.toggle_skip,
+                "Mark the current slide as an overlay slide");
+            add_action("note", this.controllables_edit_note,
+                "Edit notes for the current slide");
+            add_action("endSlide", this.set_end_user_slide,
+                "Set the current slide as the end slide");
+            add_action("saveBookmark", this.set_last_saved_slide,
+                "Bookmark the currently displayed slide");
+            add_action("loadBookmark", this.goto_last_saved_slide,
+                "Load the bookmarked slide");
+            add_action("executeScript", this.execute_external_script,
+                "Execute external script");
 
-            add_action("increaseSize", this.increase_size);
-            add_action("decreaseSize", this.decrease_size);
+            add_action_with_parameter("switchMode", GLib.VariantType.STRING,
+                this.set_mode_to_string,
+                "Switch annotation mode (normal|pointer|pen|eraser)", "mode");
 
-            add_action("toggleToolbox", this.toggle_toolbox);
+            add_action("increaseSize", this.increase_size,
+                "Increase the size of notes|pointer|pen|eraser");
+            add_action("decreaseSize", this.decrease_size,
+                "Decrease the size of notes|pointer|pen|eraser");
 
-            add_action("exitState", this.exit_state);
-            add_action("quit", this.quit);
+            add_action_with_parameter("setPenColor", GLib.VariantType.STRING,
+                this.set_pen_color_to_string,
+                "Change the pen color", "color");
+            add_action("clearDrawing", this.clear_pen_drawing,
+                "Clear drawing on the current slide");
+            add_action("toggleDrawings", this.toggle_drawings,
+                "Toggle all drawings on all slides");
+
+            add_action("toggleToolbox", this.toggle_toolbox,
+                "Toggle the toolbox");
+
+            add_action("showHelp", this.show_help,
+                "Show a help screen");
+
+            add_action("exitState", this.exit_state,
+                "Exit \"special\" state (pause, freeze, blank)");
+            add_action("reload", this.reload,
+                "Reload the presentation");
+            add_action("quit", this.quit,
+                "Exit pdfpc");
         }
 
-        protected void add_action(string name, callback func) {
+        protected void add_action(string name, callback func,
+            string description) {
             SimpleAction action = new SimpleAction(name, null);
-            action.activate.connect(() => func());  // Trying to connect func directly causes error.
+            action.activate.connect(() => func());
             this.action_group.add_action(action);
+            this.action_descriptions.add(new ActionDescription(name,
+                description));
         }
 
-        protected void add_action_with_parameter(string name, GLib.VariantType param_type, callback_with_parameter func) {
+        protected void add_action_with_parameter(string name,
+            GLib.VariantType param_type, callback_with_parameter func,
+            string description, string arg_name) {
             SimpleAction action = new SimpleAction(name, param_type);
             action.activate.connect((param) => func(param));
             this.action_group.add_action(action);
+            this.action_descriptions.add(new ActionDescription(name,
+                description, arg_name));
         }
 
         /**
-         * Get an array with all action names
-         *
-         * It would be more elegant to use the key property of actionNames, but
-         * we would need an instance for doing this...
+         * Get an array with all action names & descriptions
          */
-        public static string[] getActionDescriptions() {
-            return {
-                "next", "Go to the next slide",
-                "next10", "Jump 10 slides forward",
-                "lastOverlay", "Jump to the last overlay of the current slide",
-                "nextOverlay", "Jump forward outside of the current overlay",
-                "prev", "Go to the previous slide",
-                "prev10", "Jump 10 slides back",
-                "firstOverlay", "Jump to the first overlay of the current slide",
-                "prevOverlay", "Jump back outside of the current overlay",
-                "goto", "Ask for a page to jump to",
-                "gotoFirst", "Jump to the first slide",
-                "gotoLast", "Jump to the last slide",
-                "nextUnseen", "Jump to the next unseen slide",
-                "prevSeen", "Jump to the last previously seen slide",
-                "overview", "Show the overview mode",
-                "histBack", "Go back in history",
-                "start", "Start the timer",
-                "pause", "Pause the timer",
-                "resetTimer", "Reset the timer",
-                "blank", "Blank the presentation screen",
-                "hide", "Hide the presentation screen",
-                "freeze", "Toggle freeze the presentation screen",
-                "freezeOn", "Freeze the presentation screen",
-                "overlay", "Mark the current slide as an overlay slide",
-                "note", "Edit notes for the current slide",
-                "endSlide", "Set the current slide as the end slide",
-                "saveBookmark", "Bookmark the currently displayed slide",
-                "loadBookmark", "Load the bookmarked slide",
-                "switchMode <mode>", "Switch annotation mode (normal|pointer|pen|eraser)",
-                "increaseSize", "Increase the size of notes|pointer|pen|eraser",
-                "decreaseSize", "Decrease the size of notes|pointer|pen|eraser",
-                "setPenColor <color>", "Change the pen color",
-                "clearDrawing", "Clear drawing on the current slide",
-                "toggleDrawings", "Toggle all drawings on all slides",
-                "toggleToolbox", "Toggle the toolbox",
-                "exitState", "Exit \"special\" state (pause, freeze, blank)",
-                "quit", "Exit pdfpc",
-            };
+        public string[] get_action_descriptions() {
+            string[] retval = {};
+            foreach (var entry in this.action_descriptions) {
+                if (entry.arg_name != null) {
+                    retval += (entry.name + " <" + entry.arg_name + ">");
+                } else {
+                    retval += entry.name;
+                }
+                retval += entry.description;
+            }
+            return retval;
+        }
+
+        private string get_bindstr(KeyDef keydef, bool is_mouse) {
+            string bindstr = "", keystr, modstr = "";
+            if ((keydef.modMask & Gdk.ModifierType.CONTROL_MASK) != 0) {
+                modstr = "Ctrl+";
+            }
+            if ((keydef.modMask & Gdk.ModifierType.META_MASK) != 0) {
+                modstr = "Meta+";
+            }
+            if ((keydef.modMask & Gdk.ModifierType.SHIFT_MASK) != 0) {
+                modstr = "Shift+";
+            }
+            if (is_mouse) {
+                keystr = "Mouse_%u".printf(keydef.keycode);
+            } else {
+                keystr = Gdk.keyval_name(keydef.keycode);
+                // Simple "shifted" keycodes have been capitalized
+                // by ConfigFileReader.readBindDef()
+                if (keystr.length == 1) {
+                    keystr = keystr.down();
+                }
+            }
+            bindstr += modstr + keystr;
+            return bindstr;
+        }
+
+        /**
+         * Get an array with all action names & their bindings
+         */
+        public string[] get_action_bindings() {
+            string[] retval = {};
+
+            foreach (var entry in this.action_descriptions) {
+                var bindstr = "";
+                // Loop over the key bindings
+                foreach (var bentry in this.keyBindings.entries) {
+                    if (bentry.value.name != entry.name) {
+                        continue;
+                    }
+                    var keydef = bentry.key;
+
+                    if (bindstr != "") {
+                        bindstr += ", ";
+                    }
+                    bindstr += get_bindstr(keydef, false);
+
+                    var action = this.keyBindings.get(keydef);
+                    if (action != null && action.parameter != null) {
+                        bindstr += " [" + action.parameter.get_string() + "]";
+                    }
+                }
+                // Same for the mouse bindings
+                foreach (var bentry in this.mouseBindings.entries) {
+                    if (bentry.value.name != entry.name) {
+                        continue;
+                    }
+                    var keydef = bentry.key;
+
+                    if (bindstr != "") {
+                        bindstr += ", ";
+                    }
+                    bindstr += get_bindstr(keydef, true);
+
+                    var action = this.keyBindings.get(keydef);
+                    if (action != null && action.parameter != null) {
+                        bindstr += " [" + action.parameter.get_string() + "]";
+                    }
+                }
+                if (bindstr != "") {
+                    retval += entry.name;
+                    retval += bindstr;
+                }
+            }
+
+            return retval;
         }
 
         /**
          * Trigger an action by name
          */
-        public void trigger_action(string name) {
-            this.action_group.activate_action(name, null);
+        public void trigger_action(string name, Variant? parameter) {
+            this.action_group.activate_action(name, parameter);
         }
 
         /**
-         * Bind the (user-defined) keys
+         * Bind the (user-defined) key or mouse button
          */
-        public void bind(uint keycode, uint modMask, string action_name, GLib.Variant? parameter) {
+        private void bindKeyOrMouse(bool is_mouse, uint keycode, uint modMask,
+            string action_name, GLib.Variant? parameter) {
             Action? action = this.action_group.lookup_action(action_name);
             if (action != null) {
                 GLib.VariantType expected_type = action.get_parameter_type();
                 if (expected_type == null) {
                     if (parameter != null) {
-                        GLib.printerr("Parameter provided to action %s that does not expect one\n", action_name);
+                        GLib.printerr("Action %s does not expect a parameter\n",
+                            action_name);
                     }
                 } else if (parameter == null) {
-                    GLib.printerr("Parameter expected for action %s but not provided\n", action_name);
+                    GLib.printerr("Action %s expects a parameter\n",
+                        action_name);
                 } else {
                     assert(
                         parameter.get_type().equal(GLib.VariantType.STRING) &&
                         expected_type.equal(GLib.VariantType.STRING)
                     );
                 }
-                this.keyBindings.set(new KeyDef(keycode, modMask),
-                    new ActionAndParameter(action, parameter));
+                Gee.HashMap<KeyDef, ActionAndParameter> bindings;
+                if (is_mouse) {
+                    bindings = this.mouseBindings;
+                } else {
+                    bindings = this.keyBindings;
+                }
+                var keydef = new KeyDef(keycode, modMask);
+                bindings.set(keydef,
+                    new ActionAndParameter(action, parameter, action_name));
             } else {
                 GLib.printerr("Unknown action %s\n", action_name);
             }
+        }
+
+        private void bind(uint keycode, uint modMask,
+            string action_name, GLib.Variant? parameter) {
+            this.bindKeyOrMouse(false, keycode, modMask,
+                action_name, parameter);
+        }
+
+        private void bindMouse(uint keycode, uint modMask,
+            string action_name, GLib.Variant? parameter) {
+            this.bindKeyOrMouse(true, keycode, modMask,
+                action_name, parameter);
         }
 
         /**
@@ -1027,32 +1198,6 @@ namespace pdfpc {
          */
         public void unbindAll() {
             this.keyBindings.clear();
-        }
-
-        /**
-         * Bind the (user-defined) keys
-         */
-        public void bindMouse(uint button, uint modMask, string action_name, Variant? parameter) {
-            Action? action = this.action_group.lookup_action(action_name);
-            if (action != null) {
-                GLib.VariantType expected_type = action.get_parameter_type();
-                if (expected_type == null) {
-                    if (parameter != null) {
-                        GLib.printerr("Parameter provided to action %s that does not expect one\n", action_name);
-                    }
-                } else if (parameter == null) {
-                    GLib.printerr("Parameter expected for action %s but not provided\n", action_name);
-                } else {
-                    assert(
-                        parameter.get_type().equal(GLib.VariantType.STRING) &&
-                        expected_type.equal(GLib.VariantType.STRING)
-                    );
-                }
-                this.mouseBindings.set(new KeyDef(button, modMask),
-                    new ActionAndParameter(action, parameter));
-            } else {
-                GLib.printerr("Unknown action %s\n", action_name);
-            }
         }
 
         /**
@@ -1077,11 +1222,18 @@ namespace pdfpc {
          * this controller is needed to take care of the needed actions.
          */
         public bool key_press(Gdk.EventKey key) {
-            if (key.time != last_key_event && !ignore_keyboard_events ) {
-                last_key_event = key.time;
-                if (this.overview_shown && this.overview.key_press_event(key))
+            if (key.time != last_key_ev_time && !ignore_keyboard_events ) {
+                last_key_ev_time = key.time;
+                if (this.overview_shown) {
+                    this.overview.key_press_event(key);
                     return true;
+                }
 
+                // Punctuation characters are usually generated by keyboards
+                // with the Shift mod pressed; we ignore it in this case.
+                if (((char) key.keyval).ispunct()) {
+                    key.state &= ~Gdk.ModifierType.SHIFT_MASK;
+                }
                 var action_with_parameter = this.keyBindings.get(new KeyDef(key.keyval,
                     key.state & this.accepted_key_mods));
 
@@ -1098,8 +1250,6 @@ namespace pdfpc {
          */
         public bool button_press(Gdk.EventButton button) {
             if (!ignore_mouse_events && button.type == Gdk.EventType.BUTTON_PRESS ) {
-                // Prevent double or triple clicks from triggering additional
-                // click events
                 var action_with_parameter = this.mouseBindings.get(new KeyDef(button.button,
                     button.state & this.accepted_key_mods));
                 if (action_with_parameter != null)
@@ -1148,37 +1298,26 @@ namespace pdfpc {
          * Was the previous slide a skip one?
          */
         public bool skip_previous() {
-            return this.current_slide_number > 0 && this.metadata.real_slide_to_user_slide(this.current_slide_number - 1) == this.metadata.real_slide_to_user_slide(this.current_slide_number);
+            return this.current_slide_number > 0 &&
+                this.current_user_slide_number ==
+                    this.metadata.real_slide_to_user_slide(this.current_slide_number - 1);
         }
 
         /**
          * Is the next slide a skip one?
          */
         public bool skip_next() {
-            return this.current_slide_number < this.n_slides && this.metadata.real_slide_to_user_slide(this.current_slide_number) == this.metadata.real_slide_to_user_slide(this.current_slide_number + 1);
-        }
-
-        /**
-         * Get the last slide as defined by the user
-         */
-        public int get_end_user_slide() {
-            return this.metadata.get_end_user_slide();
+            return this.current_slide_number < this.n_slides - 1 &&
+                this.current_user_slide_number ==
+                    this.metadata.real_slide_to_user_slide(this.current_slide_number + 1);
         }
 
         /**
          * Set the last slide as defined by the user
          */
-        public void set_end_user_slide() {
+        private void set_end_user_slide() {
             this.metadata.set_end_user_slide(this.current_user_slide_number + 1);
             this.controllables_update();
-        }
-
-        /**
-         * Set the last slide as defined by the user
-         */
-        public void set_end_user_slide_overview() {
-            int user_selected = this.overview.current_slide;
-            this.metadata.set_end_user_slide(user_selected + 1);
         }
 
         /**
@@ -1188,34 +1327,6 @@ namespace pdfpc {
             this.metadata.set_last_saved_slide(this.current_user_slide_number + 1);
             this.controllables_update();
             presenter.session_saved();
-        }
-
-        /**
-         * Register the current slide in the history
-         */
-        void push_history() {
-            this.history.offer_head(this.current_slide_number);
-        }
-
-        /**
-         * A request to change the page has been issued
-         */
-        public void page_change_request(int page_number, bool start_timer = true) {
-            if (page_number != this.current_slide_number) {
-                this.push_history();
-            }
-
-            this.current_slide_number = page_number;
-            this.current_user_slide_number = this.metadata.real_slide_to_user_slide(
-                this.current_slide_number);
-            if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
-                this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
-            }
-            this.controllables_update();
-
-            if (start_timer) {
-                this.timer.start();
-            }
         }
 
         /**
@@ -1277,10 +1388,7 @@ namespace pdfpc {
                 return false;
             }
 
-            //controllable.set_controller( this );
             this.controllables.add(controllable);
-            if (this.main_view == null)
-                this.main_view = controllable.main_view;
 
             return true;
         }
@@ -1289,62 +1397,23 @@ namespace pdfpc {
          * Go to the next slide
          */
         public void next_page() {
-            if (overview_shown)
-                return;
+            var new_slide_number = this.current_slide_number + 1;
 
-            this.timer.start();
-            // there is a next slide
-            if (this.current_slide_number < this.n_slides - 1) {
-                ++this.current_slide_number;
-                this.current_user_slide_number = this.metadata.real_slide_to_user_slide(this.current_slide_number);
-
-                if (!this.frozen) {
-                    this.faded_to_black = false;
-                }
-
-                this.controllables_update();
-            } else if (this.black_on_end && !this.faded_to_black) {
-                this.fade_to_black();
-            }
-            if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
-                this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
-            }
+            this.switch_to_slide_number(new_slide_number);
         }
 
         /**
          * Go to the next user slide
          */
         public void next_user_page() {
-            this.timer.start();
-            bool needs_update = false; // Did we change anything? Default: no
-
-            // there is a next user slide
-            if (this.current_user_slide_number < this.metadata.get_user_slide_count() - 1) {
-                ++this.current_user_slide_number;
-                this.current_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number);
-                needs_update = true;
+            int new_slide_number;
+            if (this.current_user_slide_number < this.user_n_slides - 1) {
+                new_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number + 1);
             } else {
-                // we are at the last slide
-                if (this.current_slide_number == this.n_slides - 1) {
-                    if (this.black_on_end && !this.faded_to_black) {
-                        this.fade_to_black();
-                    }
-                } else {
-                    // move to the last slide, we are already at the last user slide
-                    this.current_slide_number = this.n_slides - 1;
-                }
+                new_slide_number = (int) this.n_slides - 1;
             }
 
-            if (needs_update) {
-                if (!this.frozen) {
-                    this.faded_to_black = false;
-                }
-                this.controllables_update();
-            }
-
-            if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
-                this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
-            }
+            this.switch_to_slide_number(new_slide_number);
         }
 
         /**
@@ -1352,186 +1421,68 @@ namespace pdfpc {
          * otherwise go to largest already seen real slide on next user slide
          */
         public void next_unseen() {
-            this.timer.start();
-
-            if (!this.frozen) {
-                this.faded_to_black = false;
-            }
-
-            if(this.current_slide_number == this.n_slides - 1) {
-                return;
-            }
-
-            int next_slide = this.current_slide_number + 1;
-            if(next_slide < this.n_slides - 1) {
-                int user_slide_at_next_slide = this.metadata.real_slide_to_user_slide(next_slide);
-                if(this.user_slide_progress[user_slide_at_next_slide] != 0 &&
-                        this.user_slide_progress[user_slide_at_next_slide] >= next_slide) {
-                    next_slide = this.user_slide_progress[user_slide_at_next_slide];
-                }
-            }
-
-            this.current_slide_number = next_slide;
-            this.current_user_slide_number = this.metadata.real_slide_to_user_slide(this.current_slide_number);
-            if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
-                this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
-            }
-
-            this.controllables_update();
+            // TODO: implement properly
         }
 
         /**
          * Jump to the last overlay for the current user slide
          */
         public void jump_to_last_overlay() {
-            this.timer.start();
+            var new_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number, true);
 
-            int destination = this.metadata.user_slide_to_real_slide(this.current_user_slide_number, true);
-            if (this.current_slide_number != destination) {
-                this.current_slide_number = destination;
-
-                if (!this.frozen) {
-                    this.faded_to_black = false;
-                }
-                this.controllables_update();
-
-                if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
-                    this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
-                }
-            }
+            this.switch_to_slide_number(new_slide_number);
         }
 
         /**
          * Jump to the first overlay for the current user slide
          */
         public void jump_to_first_overlay() {
-            this.timer.start();
+            var new_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number, false);
 
-            int destination = this.metadata.user_slide_to_real_slide(this.current_user_slide_number, false);
-            if (this.current_slide_number != destination) {
-                this.current_slide_number = destination;
-
-                if (!this.frozen) {
-                    this.faded_to_black = false;
-                }
-                this.controllables_update();
-
-                if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
-                    this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
-                }
-            }
+            this.switch_to_slide_number(new_slide_number);
         }
 
         /**
          * Go to the previous slide
          */
         public void previous_page() {
-            this.timer.start();
+            var new_slide_number = this.current_slide_number - 1;
 
-            if (this.current_slide_number > 0) {
-                --this.current_slide_number;
-                this.current_user_slide_number = this.metadata.real_slide_to_user_slide(this.current_slide_number);
-
-                if (!this.frozen) {
-                    this.faded_to_black = false;
-                }
-                this.controllables_update();
-
-                if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
-                    this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
-                }
-            }
+            this.switch_to_slide_number(new_slide_number);
         }
 
         /**
          * Go to the previous user slide
          */
         public void previous_user_page() {
-            this.timer.start();
+            var new_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number - 1);
 
-            if (this.current_user_slide_number > 0) {
-                --this.current_user_slide_number;
-                this.current_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number);
-            } else {
-                this.current_slide_number = 0;
-            }
-
-            if (!this.frozen) {
-                this.faded_to_black = false;
-            }
-            this.controllables_update();
-
-            if(this.current_slide_number > this.user_slide_progress[this.current_user_slide_number]) {
-                this.user_slide_progress[this.current_user_slide_number] = this.current_slide_number;
-            }
+            this.switch_to_slide_number(new_slide_number);
         }
 
         /**
          * Go to the largest already seen real slide on previous user slide
          */
         public void previous_seen() {
-            this.timer.start();
-
-            if (!this.frozen) {
-                this.faded_to_black = false;
-            }
-
-            if(this.current_slide_number == 0) {
-                return;
-            }
-            this.current_slide_number = this.user_slide_progress[this.current_user_slide_number-1];
-            this.current_user_slide_number = this.metadata.real_slide_to_user_slide(this.current_slide_number);
-
-            this.controllables_update();
-        }
-
-        /**
-         * Wrapper function to work with key bindings and callbacks
-         */
-        public void goto_first() {
-            _goto_first(false);
+            // TODO: implement properly
         }
 
         /**
          * Go to the first slide
          */
-        private void _goto_first(bool skipHistory) {
-            this.timer.start();
-
-            // update history if we are not already at the first slide
-            if (this.current_slide_number > 0 && !skipHistory) {
-                this.push_history();
-            }
-
-            this.current_slide_number = 0;
-            this.current_user_slide_number = 0;
-
-            if (!this.frozen) {
-                this.faded_to_black = false;
-            }
-            this.controllables_update();
+        private void goto_first() {
+            this.switch_to_slide_number(0);
         }
 
         /**
          * Go to the last displayed slide
          */
         public void goto_last_saved_slide() {
+            var new_user_slide_number = this.metadata.get_last_saved_slide() - 1;
+            var new_slide_number = this.metadata.user_slide_to_real_slide(new_user_slide_number);
 
-            if (this.metadata.get_last_saved_slide() == -1) {
-                return;
-            }
+            this.switch_to_slide_number(new_slide_number);
 
-            // Start the timer
-            this.timer.start();
-
-            this.current_user_slide_number = this.metadata.get_last_saved_slide() - 1;
-            this.current_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number);
-
-            if (!this.frozen) {
-                this.faded_to_black = false;
-            }
-
-            this.controllables_update();
             presenter.session_loaded();
         }
 
@@ -1539,15 +1490,20 @@ namespace pdfpc {
          * Go to the last slide
          */
         public void goto_last() {
+            var new_user_slide_number = this.metadata.get_end_user_slide() - 1;
+            var new_slide_number = this.metadata.user_slide_to_real_slide(new_user_slide_number);
+
+            this.switch_to_slide_number(new_slide_number);
+        }
+
+        /**
+         * Go to the named slide
+         */
+        public void goto_string(Variant? page) {
             this.timer.start();
 
-            // if are not already at the last slide, update history
-            if (this.current_user_slide_number < this.metadata.get_end_user_slide()) {
-                this.push_history();
-            }
-
-            this.current_user_slide_number = this.metadata.get_end_user_slide() - 1;
-            this.current_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number);
+            int destination = int.parse(page.get_string()) - 1;
+            this.goto_user_page(destination);
 
             if (!this.frozen) {
                 this.faded_to_black = false;
@@ -1559,90 +1515,58 @@ namespace pdfpc {
          * Jump 10 (user) slides forward
          */
         public void jump10() {
-            if (this.overview_shown) {
-                return;
-            }
+            var new_user_slide_number = int.min(this.current_user_slide_number + 10, this.user_n_slides - 1);
+            var new_slide_number = this.metadata.user_slide_to_real_slide(new_user_slide_number);
 
-            this.timer.start();
-
-            this.current_user_slide_number = int.min(this.current_user_slide_number + 10, this.metadata.get_user_slide_count() - 1);
-            this.current_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number);
-
-            if (!this.frozen) {
-                this.faded_to_black = false;
-            }
-            this.controllables_update();
+            this.switch_to_slide_number(new_slide_number);
         }
 
         /**
          * Jump 10 (user) slides backward
          */
         public void back10() {
-            if (this.overview_shown) {
-                return;
-            }
+            var new_user_slide_number = int.max(this.current_user_slide_number - 10, 0);
+            var new_slide_number = this.metadata.user_slide_to_real_slide(new_user_slide_number);
 
-            this.timer.start();
-
-            this.current_user_slide_number = int.max(this.current_user_slide_number - 10, 0);
-            this.current_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number);
-
-            if (!this.frozen) {
-                this.faded_to_black = false;
-            }
-            this.controllables_update();
+            this.switch_to_slide_number(new_slide_number);
         }
 
         /**
-         * Goto a slide in user page numbers. page_number is 1 indexed.
+         * Goto a slide in user page numbers
          */
         public void goto_user_page(int page_number, bool useLast = true) {
-            this.timer.start();
-
-            if (this.current_user_slide_number != page_number - 1) {
-                this.push_history();
-            }
-
             this.controllables_hide_overview();
-            int destination = page_number - 1;
-            int n_user_slides = this.metadata.get_user_slide_count();
-            if (page_number < 1) {
-                destination = 0;
-            } else if (page_number >= n_user_slides) {
-                destination = n_user_slides - 1;
-            }
-            this.current_user_slide_number = destination;
-            this.current_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number, useLast);
-            if (!this.frozen) {
-                this.faded_to_black = false;
-            }
+
+            var new_slide_number = this.metadata.user_slide_to_real_slide(page_number, useLast);
+            this.switch_to_slide_number(new_slide_number);
+
             this.set_ignore_input_events(false);
-            this.controllables_update();
         }
 
         /**
          * Go back in history
          */
-        public void history_back() {
-            if (this.overview_shown) {
+        public void history_goto_back() {
+            if (this.history_bck.is_empty) {
                 return;
             }
 
-            if (this.history.is_empty) {
-                // skip history pushing to prevent slide hopping
-                this._goto_first(true);
+            var new_slide_number = this.history_bck.poll_head();
+            this.history_fwd.offer_head(this.current_slide_number);
+            this.switch_to_slide_number(new_slide_number, true);
+        }
 
+        /**
+         * Go forward in history
+         */
+        public void history_goto_fwd() {
+            if (this.history_fwd.is_empty) {
                 return;
             }
 
-            int history_head = this.history.poll_head();
-            this.current_slide_number = history_head;
-            this.current_user_slide_number = this.metadata.real_slide_to_user_slide(this.current_slide_number);
-
-            if (!this.frozen) {
-                this.faded_to_black = false;
-            }
-            this.controllables_update();
+            var new_slide_number = this.history_fwd.poll_head();
+            this.history_bck.offer_head(this.current_slide_number);
+            this.switch_to_slide_number(new_slide_number, true);
         }
 
         /**
@@ -1653,6 +1577,9 @@ namespace pdfpc {
         }
 
         protected void toggle_overview() {
+            if (!this.metadata.is_ready) {
+                return;
+            }
             if (this.overview_shown) {
                 this.controllables_hide_overview();
             } else {
@@ -1661,14 +1588,15 @@ namespace pdfpc {
         }
 
         protected void controllables_show_overview() {
-            if (this.overview != null) {
+            this.show_overview_request();
+            // the show_overview request is not guaranteed to succeed,
+            // hence we check
+            if (this.overview_shown) {
                 this.ignore_mouse_events = true;
-                this.show_overview_request();
-                this.overview_shown = true;
             }
         }
 
-        protected void controllables_hide_overview() {
+        public void controllables_hide_overview() {
             this.ignore_mouse_events = false;
             // It may happen that in overview mode, the number of (user) slides
             // has changed due to overlay changes. We may need to correct our
@@ -1676,15 +1604,26 @@ namespace pdfpc {
             if (this.current_user_slide_number >= this.user_n_slides) {
                 this.goto_last();
             }
-            this.overview_shown = false;
             this.hide_overview_request();
             this.controllables_update();
+        }
+
+        protected void toggle_windowed() {
+            if (this.presenter != null) {
+                this.presenter.toggle_windowed();
+            } else if (this.presentation != null) {
+                this.presentation.toggle_windowed();
+            }
         }
 
         /**
          * Fill the presentation display with black
          */
         public void fade_to_black() {
+            if (this.single_screen_mode) {
+                return;
+            }
+
             this.faded_to_black = !this.faded_to_black;
             this.controllables_update();
         }
@@ -1693,6 +1632,10 @@ namespace pdfpc {
          * Hide the presentation window
          */
         public void hide_presentation() {
+            if (this.single_screen_mode) {
+                return;
+            }
+
             this.hidden = !this.hidden;
             this.controllables_update();
         }
@@ -1701,9 +1644,6 @@ namespace pdfpc {
          * Edit note for current slide.
          */
         protected void controllables_edit_note() {
-            if (this.overview_shown) {
-                return;
-            }
             this.edit_note_request(); // emit signal
         }
 
@@ -1711,22 +1651,23 @@ namespace pdfpc {
          * Ask for the page to jump to
          */
         protected void controllables_ask_goto_page() {
-            if (this.overview_shown) {
-                return;
-            }
             this.ask_goto_page_request();
         }
 
         /**
-         * Freeze the display
+         * Freeze the presentation window
          */
         public void toggle_freeze() {
+            if (this.single_screen_mode) {
+                return;
+            }
+
             this.frozen = !this.frozen;
             if (!this.frozen) {
                 this.faded_to_black = false;
             }
             this.controllables_update();
-            main_view.freeze_toggled(this.frozen);
+            this.presentation.main_view.freeze_toggled(this.frozen);
         }
 
         /**
@@ -1740,8 +1681,6 @@ namespace pdfpc {
                     this.overview.remove_current(this.user_n_slides);
                 }
             } else {
-                this.current_user_slide_number += this.metadata.toggle_skip(
-                    this.current_slide_number, this.current_user_slide_number);
                 this.overview.set_n_slides(this.user_n_slides);
                 this.controllables_update();
             }
@@ -1768,6 +1707,41 @@ namespace pdfpc {
          */
         protected void reset_timer() {
             this.timer.reset();
+        }
+
+        /**
+         * Reload the presentation
+         */
+        protected void reload() {
+            var fname = this.metadata.pdf_fname;
+            if (fname != null) {
+                if (this.overview_shown) {
+                    this.controllables_hide_overview();
+                }
+
+                var position_saved = this.current_slide_number;
+                this.metadata.load(fname);
+                if (this.n_slides == 0) {
+                    return;
+                }
+
+                // Make sure the current position remains valid
+                if (position_saved >= this.n_slides) {
+                    this.current_slide_number = (int) this.n_slides - 1;
+                }
+
+                this.history_bck.clear();
+                this.history_fwd.clear();
+
+                // Reset the drawing storage & clear the current drawings
+                this.pen_drawing.clear_storage();
+                this.clear_pen_drawing();
+
+                this.overview.set_n_slides(this.user_n_slides);
+                this.metadata.renderer.invalidate_cache();
+                this.reload_request();
+                this.controllables_update();
+            }
         }
 
         protected void increase_font_size() {
@@ -1826,6 +1800,12 @@ namespace pdfpc {
             this.controllables_update();
         }
 
+        public void show_help() {
+            if (this.presenter != null) {
+                this.presenter.show_help_window(true);
+            }
+        }
+
         protected void exit_state() {
             if (this.faded_to_black) {
                 this.fade_to_black();
@@ -1844,12 +1824,11 @@ namespace pdfpc {
          * Give the Gdk.Rectangle corresponding to the Poppler.Rectangle for the nth
          * controllable's main view.
          */
-        public void overlay_pos(int n, Poppler.Rectangle area, out Gdk.Rectangle rect, out int gdk_scale, out Window.Fullscreen window) {
+        public void overlay_pos(int n, Poppler.Rectangle area, out Gdk.Rectangle rect, out Window.Fullscreen window) {
             window = null;
 
             Controllable c = (n < this.controllables.size) ? this.controllables.get(n) : null;
             // default scale, and make the compiler happy
-            gdk_scale = 1;
             if (c == null) {
                 rect = Gdk.Rectangle();
                 return;
@@ -1860,7 +1839,6 @@ namespace pdfpc {
                 return;
             }
             rect = c.main_view.convert_poppler_rectangle_to_gdk_rectangle(area);
-            gdk_scale = c.main_view.scale_factor;
         }
 #endif
     }

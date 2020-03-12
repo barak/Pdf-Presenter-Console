@@ -36,6 +36,7 @@ bind S+m                loadBookmark
 
 # History
 bind S+BackSpace        histBack
+bind S+space            histFwd
 bind S+End              nextUnseen
 bind S+Home             prevSeen
 
@@ -47,6 +48,12 @@ bind t                  toggleToolbox
 
 # Exit
 bind C+q                quit
+
+# Exit
+bind C+r                reload
+
+# Presenter state
+bind w                  windowed
 
 # Presentation state
 bind b                  blank
@@ -87,7 +94,13 @@ bind d                  toggleDrawings
 
 # Pen colors
 # Can be set by
-# bind S+1                setPenColor red|orange|yellow|green|blue|violet|black|white
+# bind S+1              setPenColor red|orange|yellow|green|blue|violet|black|white
+
+# Script execution
+bind S+x                executeScript
+
+# Short help
+bind question           showHelp
 
 #### Mouse bindings
 mouse 1                 next

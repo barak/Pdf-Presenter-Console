@@ -37,11 +37,6 @@ namespace pdfpc.Window {
      */
     public class Presenter : Fullscreen, Controllable {
         /**
-         * The registered PresentationController
-         */
-        public PresentationController presentation_controller { get; protected set; }
-
-        /**
          * Only handle links and annotations on the current_view
          */
         public View.Pdf main_view {
@@ -76,7 +71,15 @@ namespace pdfpc.Window {
          */
         protected Gtk.Entry slide_progress;
 
-        protected Gtk.ProgressBar prerender_progress;
+        /**
+         * The bottom row is 10% of the window height, fixed
+         */
+        private int bottom_frac_inv = 10;
+
+        /**
+         * Container for the status icons
+         */
+        protected Gtk.Box status;
 
         /**
          * Indication that the slide is blanked (faded to black)
@@ -122,6 +125,11 @@ namespace pdfpc.Window {
          * CSS provider for setting note font size
          */
         protected Gtk.CssProvider css_provider;
+
+        /**
+         * CSS provider for setting timer and slide progress font size
+         */
+        protected Gtk.CssProvider bottom_text_css_provider;
 
         /**
          * Indication that the highlight tool is selected
@@ -179,27 +187,17 @@ namespace pdfpc.Window {
          **/
         private int toolbox_icon_height;
 
-        /**
-         * Metadata of the slides
-         */
-        protected Metadata.Pdf metadata;
-
-        /**
-         * Width of next/notes area
-         **/
-        protected int next_allocated_width;
-
         protected bool on_button_press(Gtk.Widget pbut, Gdk.EventButton event) {
-	    if (event.button == 1 ) {
+            if (event.button == 1 ) {
                 var w = this.get_window();
 
                 w.get_position(out this.toolbox_x0, out this.toolbox_y0);
 
                 this.toolbox_x0 += (int) event.x;
-	        this.toolbox_y0 += (int) event.y;
+                this.toolbox_y0 += (int) event.y;
             }
 
-	    return true;
+            return true;
         }
 
         protected bool on_move_pointer(Gtk.Widget pbut, Gdk.EventMotion event) {
@@ -266,107 +264,214 @@ namespace pdfpc.Window {
             // is active
             var popup = button.get_popup();
             popup.show.connect(() => {
-                this.presentation_controller.set_ignore_input_events(true);
+                this.controller.set_ignore_input_events(true);
             });
             popup.hide.connect(() => {
-                this.presentation_controller.set_ignore_input_events(false);
+                this.controller.set_ignore_input_events(false);
             });
 
             return button;
         }
 
+        protected Gtk.ScrolledWindow create_help_window() {
+            var help_sw = new Gtk.ScrolledWindow(null, null);
+            help_sw.set_policy(Gtk.PolicyType.AUTOMATIC,
+                Gtk.PolicyType.AUTOMATIC);
+            help_sw.get_style_context().add_class("help");
+            help_sw.key_press_event.connect((event) => {
+                    // Exit the help window on some reasonable keystrokes
+                    switch (event.keyval) {
+                    case Gdk.Key.Escape:
+                    case Gdk.Key.Return:
+                    case Gdk.Key.q:
+                        this.show_help_window(false);
+                        return true;
+                    default:
+                        return false;
+                    }
+                });
+
+            var help_grid = new Gtk.Grid();
+            help_grid.row_homogeneous = true;
+            help_grid.column_spacing = 20;
+            help_grid.margin = 20;
+            help_sw.add(help_grid);
+
+            var actions = this.controller.get_action_bindings();
+            for (int i = 0; i < actions.length; i += 2) {
+                int row = i/2;
+                var action_lbl = new Gtk.Label(actions[i]);
+                action_lbl.halign = Gtk.Align.START;
+                var binding_lbl = new Gtk.Label(actions[i + 1]);
+                binding_lbl.halign = Gtk.Align.START;
+                help_grid.attach(action_lbl, 0, row);
+                help_grid.attach(binding_lbl, 1, row);
+            }
+
+            return help_sw;
+        }
+
+        private void disable_paned_handle(Gtk.Paned paned) {
+            paned.map.connect(() => {
+                    var handle = paned.get_handle_window();
+                    if (handle != null) {
+                        handle.set_cursor(null);
+                        handle.set_events(0);
+                    }
+                });
+        }
+
+        /**
+         * (Re)load icons
+         **/
+        private void load_icons() {
+            double bottom_height = (double) this.window_h/this.bottom_frac_inv;
+            int icon_height = (int) (0.9*bottom_height);
+
+            // Remove all existing icons
+            var icons = this.status.get_children();
+            foreach (Gtk.Widget icon in icons) {
+                // NB: destroy() calls remove() internally!
+                icon.destroy();
+            }
+
+            this.blank_icon = this.load_icon("blank.svg", icon_height);
+            this.hidden_icon = this.load_icon("hidden.svg", icon_height);
+            this.frozen_icon = this.load_icon("snow.svg", icon_height);
+            this.pause_icon = this.load_icon("pause.svg", icon_height);
+            this.saved_icon = this.load_icon("saved.svg", icon_height);
+            this.loaded_icon = this.load_icon("loaded.svg", icon_height);
+            this.locked_icon = this.load_icon("locked.svg", icon_height);
+
+            this.highlight_icon = this.load_icon("highlight.svg", icon_height);
+            this.pen_icon = this.load_icon("pen.svg", icon_height);
+            this.eraser_icon = this.load_icon("eraser.svg", icon_height);
+
+            this.status.pack_start(this.blank_icon, false, false);
+            this.status.pack_start(this.hidden_icon, false, false);
+            this.status.pack_start(this.frozen_icon, false, false);
+            this.status.pack_start(this.pause_icon, false, false);
+            this.status.pack_start(this.saved_icon, false, false);
+            this.status.pack_start(this.loaded_icon, false, false);
+            this.status.pack_start(this.locked_icon, false, false);
+            this.status.pack_start(this.highlight_icon, false, false);
+            this.status.pack_start(this.pen_icon, false, false);
+            this.status.pack_start(this.eraser_icon, false, false);
+        }
+
+        /**
+         * Update (hide/show) status icons
+         **/
+        private void update_status_icons() {
+            if (this.timer.is_paused()) {
+                this.pause_icon.show();
+            } else {
+                this.pause_icon.hide();
+            }
+            if (this.controller.faded_to_black) {
+                this.blank_icon.show();
+            } else {
+                this.blank_icon.hide();
+            }
+            if (this.controller.hidden) {
+                this.hidden_icon.show();
+            } else {
+                this.hidden_icon.hide();
+            }
+            if (this.controller.frozen) {
+                this.frozen_icon.show();
+            } else {
+                this.frozen_icon.hide();
+            }
+            if (this.controller.is_pointer_active()) {
+                this.highlight_icon.show();
+            } else {
+                this.highlight_icon.hide();
+            }
+            if (this.controller.is_eraser_active()) {
+                this.eraser_icon.show();
+            } else {
+                this.eraser_icon.hide();
+            }
+            if (this.controller.is_pen_active()) {
+                this.pen_icon.show();
+            } else {
+                this.pen_icon.hide();
+            }
+        }
+
+        /**
+         * Set font size for the timer & slide progress widgets
+         **/
+        private void resize_bottom_texts() {
+            const string css_template = ".bottomText { font-size: %dpx; }";
+            var target_size_height = (int) (12.0*this.window_h/400.0);
+            var bottom_css = css_template.printf(target_size_height);
+
+            try {
+                this.bottom_text_css_provider.load_from_data(bottom_css, -1);
+            } catch (Error e) {
+                GLib.printerr("Warning: failed to set CSS for controls.\n");
+            }
+        }
+
+        /**
+         * Resize the overview
+         **/
+        private void resize_overview() {
+            this.overview.set_available_space(this.window_w,
+                (int) Math.floor(this.window_h*(1.0 - 1.0/bottom_frac_inv)));
+        }
+
+        /**
+         * Resize parts of the GUI that cannot do it themselves (icons, text)
+         **/
+        protected override void resize_gui() {
+            this.load_icons();
+            this.update_status_icons();
+
+            this.resize_bottom_texts();
+
+            this.resize_overview();
+        }
+
        /**
          * Base constructor instantiating a new presenter window
          */
-        public Presenter(Metadata.Pdf metadata, int screen_num,
-            PresentationController presentation_controller) {
-            base(screen_num);
-            this.role = "presenter";
-            this.title = "pdfpc - presenter (%s)".printf(metadata.get_document().get_title());
+        public Presenter(PresentationController controller,
+            int screen_num, bool windowed) {
+            base(controller, true, screen_num, windowed);
 
-            this.destroy.connect((source) => presentation_controller.quit());
+            this.controller.reload_request.connect(this.on_reload);
+            this.controller.update_request.connect(this.update);
+            this.controller.edit_note_request.connect(this.edit_note);
+            this.controller.ask_goto_page_request.connect(this.ask_goto_page);
+            this.controller.show_overview_request.connect(this.show_overview);
+            this.controller.hide_overview_request.connect(this.hide_overview);
+            this.controller.increase_font_size_request.connect(this.increase_font_size);
+            this.controller.decrease_font_size_request.connect(this.decrease_font_size);
 
-            this.presentation_controller = presentation_controller;
-            this.presentation_controller.update_request.connect(this.update);
-            this.presentation_controller.edit_note_request.connect(this.edit_note);
-            this.presentation_controller.ask_goto_page_request.connect(this.ask_goto_page);
-            this.presentation_controller.show_overview_request.connect(this.show_overview);
-            this.presentation_controller.hide_overview_request.connect(this.hide_overview);
-            this.presentation_controller.increase_font_size_request.connect(this.increase_font_size);
-            this.presentation_controller.decrease_font_size_request.connect(this.decrease_font_size);
-
-            this.metadata = metadata;
-
-            // We need the value of 90% height a lot of times. Therefore store it
-            // in advance
-            var bottom_position = (int) Math.floor(this.screen_geometry.height * 0.9);
-            var bottom_height = this.screen_geometry.height - bottom_position;
+            // TODO: update the page aspect ratio on document reload
+            float page_ratio = (float)
+                (metadata.get_page_width()/metadata.get_page_height());
 
             // In most scenarios the current slide is displayed bigger than the
             // next one. The option current_size represents the width this view
             // should use as a percentage value. The maximal height is 90% of
             // the screen, as we need a place to display the timer and slide
             // count.
-            Gdk.Rectangle current_slide_rect;
             int current_allocated_width = (int) Math.floor(
-                this.screen_geometry.width * Options.current_size / (double) 100);
-            this.current_view = new View.Pdf.from_metadata(
-                metadata,
-                current_allocated_width,
-                (int) Math.floor(Options.current_height * bottom_position / (double) 100),
-                Metadata.Area.NOTES,
-                Options.black_on_end,
-                true,
-                this.presentation_controller,
-                this.gdk_scale,
-                out current_slide_rect
-            );
+                this.window_w*Options.current_size/100.0);
+            this.current_view = new View.Pdf.from_fullscreen(this,
+                Metadata.Area.NOTES, true);
 
-            // The next slide is right to the current one and takes up the
-            // remaining width
+            this.next_view = new View.Pdf.from_fullscreen(this,
+                Metadata.Area.CONTENT, false, true);
 
-            // do not allocate negative width (in case of current_allocated_width == this.screen_geometry.width)
-            // this happens, when the user set -u 100
-            int next_allocated_width = (int)Math.fmax(this.screen_geometry.width - current_allocated_width - 4, 0);
-            this.next_allocated_width = next_allocated_width;
-            // We leave a bit of margin between the two views
-            Gdk.Rectangle next_slide_rect;
-            this.next_view = new View.Pdf.from_metadata(
-                metadata,
-                next_allocated_width,
-                (int) Math.floor(Options.next_height * bottom_position / (double)100 ),
-                Metadata.Area.CONTENT,
-                true,
-                false,
-                this.presentation_controller,
-                this.gdk_scale,
-                out next_slide_rect
-            );
-
-            Gdk.Rectangle strict_next_slide_rect;
-            this.strict_next_view = new View.Pdf.from_metadata(
-                metadata,
-                (int) Math.floor(0.5 * current_allocated_width),
-                (int) (Options.disable_auto_grouping ? 1 : (Math.floor(0.19 * bottom_position) - 2)),
-                Metadata.Area.CONTENT,
-                true,
-                false,
-                this.presentation_controller,
-                this.gdk_scale,
-                out strict_next_slide_rect
-            );
-            Gdk.Rectangle strict_prev_slide_rect;
-            this.strict_prev_view = new View.Pdf.from_metadata(
-                metadata,
-                (int) Math.floor(0.5 * current_allocated_width),
-                (int) (Options.disable_auto_grouping ? 1 : (Math.floor(0.19 * bottom_position) - 2)),
-                Metadata.Area.CONTENT,
-                true,
-                false,
-                this.presentation_controller,
-                this.gdk_scale,
-                out strict_prev_slide_rect
-            );
+            this.strict_next_view = new View.Pdf.from_fullscreen(this,
+                Metadata.Area.CONTENT, false);
+            this.strict_prev_view = new View.Pdf.from_fullscreen(this,
+                Metadata.Area.CONTENT, false);
 
             this.css_provider = new Gtk.CssProvider();
             Gtk.StyleContext.add_provider_for_screen(this.screen_to_use,
@@ -375,7 +480,6 @@ namespace pdfpc.Window {
             // TextView for notes in the slides
             this.notes_view = new Gtk.TextView();
             this.notes_view.name = "notesView";
-            this.notes_view.set_size_request(next_allocated_width, -1);
             this.notes_view.editable = false;
             this.notes_view.cursor_visible = false;
             this.notes_view.wrap_mode = Gtk.WrapMode.WORD;
@@ -391,8 +495,13 @@ namespace pdfpc.Window {
                 this.set_font_size(this.metadata.font_size);
             }
 
+            this.bottom_text_css_provider = new Gtk.CssProvider();
+            Gtk.StyleContext.add_provider_for_screen(this.screen_to_use,
+                this.bottom_text_css_provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_FALLBACK);
+
             // The countdown timer is centered in the 90% bottom part of the screen
-            this.timer = this.presentation_controller.getTimer();
+            this.timer = this.controller.getTimer();
             this.timer.name = "timer";
             this.timer.get_style_context().add_class("bottomText");
             this.timer.set_justify(Gtk.Justification.CENTER);
@@ -411,144 +520,108 @@ namespace pdfpc.Window {
             // 7 chars (i.e. maximal 999/999 for displaying)
             this.slide_progress.width_chars = 7;
 
-            this.prerender_progress = new Gtk.ProgressBar();
-            this.prerender_progress.name = "prerenderProgress";
-            this.prerender_progress.show_text = true;
-
-            // Don't display prerendering text if the user has disabled
-            // it, but still create the control to ensure the layout
-            // doesn't change.
-            if (Options.disable_caching) {
-                this.prerender_progress.text = "";
-            } else {
-                this.prerender_progress.text = "Prerendering...";
-            }
-            this.prerender_progress.set_ellipsize(Pango.EllipsizeMode.END);
-            this.prerender_progress.no_show_all = true;
-            this.prerender_progress.valign = Gtk.Align.END;
-
-            int icon_height = (int)Math.round(bottom_height*0.9);
-
-            this.blank_icon = this.load_icon("blank.svg", icon_height);
-            this.hidden_icon = this.load_icon("hidden.svg", icon_height);
-            this.frozen_icon = this.load_icon("snow.svg", icon_height);
-            this.pause_icon = this.load_icon("pause.svg", icon_height);
-            this.saved_icon = this.load_icon("saved.svg", icon_height);
-            this.loaded_icon = this.load_icon("loaded.svg", icon_height);
-            this.locked_icon = this.load_icon("locked.svg", icon_height);
-
-            this.highlight_icon = this.load_icon("highlight.svg", icon_height);
-            this.pen_icon = this.load_icon("pen.svg", icon_height);
-            this.eraser_icon = this.load_icon("eraser.svg", icon_height);
+            this.status = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 2);
+            this.load_icons();
 
             this.add_events(Gdk.EventMask.KEY_PRESS_MASK);
             this.add_events(Gdk.EventMask.BUTTON_PRESS_MASK);
             this.add_events(Gdk.EventMask.SCROLL_MASK);
 
-            this.key_press_event.connect(this.presentation_controller.key_press);
-            this.button_press_event.connect(this.presentation_controller.button_press);
-            this.scroll_event.connect(this.presentation_controller.scroll);
+            this.resize_bottom_texts();
 
-            // resize the bottom text based on the window height
-            // (see http://stackoverflow.com/a/35237445/730138)
-            var bottom_text_css_provider = new Gtk.CssProvider();
-            Gtk.StyleContext.add_provider_for_screen(this.screen_to_use,
-                bottom_text_css_provider, Gtk.STYLE_PROVIDER_PRIORITY_FALLBACK);
-
-            const string bottom_text_css_template = ".bottomText { font-size: %dpx; }";
-            var target_size_height = (int) ((double)this.screen_geometry.height / 400.0 * 12.0);
-            var bottom_css = bottom_text_css_template.printf(target_size_height);
-
-            try {
-                bottom_text_css_provider.load_from_data(bottom_css, -1);
-            } catch (Error e) {
-                GLib.printerr("Warning: failed to set CSS for auto-sized bottom controls.\n");
-            }
-
-            this.overview = new Overview(this.metadata, this.presentation_controller, this);
+            this.overview = new Overview(this.controller);
             this.overview.vexpand = true;
             this.overview.hexpand = true;
-            this.overview.set_n_slides(this.presentation_controller.user_n_slides);
-            this.presentation_controller.set_overview(this.overview);
-            this.presentation_controller.register_controllable(this);
+            this.overview.set_n_slides(this.controller.user_n_slides);
+            this.controller.set_overview(this.overview);
 
-            // Enable the render caching if it hasn't been forcefully disabled.
-            if (!Options.disable_caching) {
-                this.current_view.get_renderer().cache = Renderer.Cache.create(metadata);
-                this.next_view.get_renderer().cache = Renderer.Cache.create(metadata);
-                this.strict_next_view.get_renderer().cache = Renderer.Cache.create(metadata);
-                this.strict_prev_view.get_renderer().cache = Renderer.Cache.create(metadata);
-            }
+            Gtk.AspectFrame frame;
 
-            Gtk.Box slide_views = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 4);
+            var slide_views = new Gtk.Paned(Gtk.Orientation.HORIZONTAL);
+            slide_views.position = current_allocated_width;
+            slide_views.wide_handle = true;
+            disable_paned_handle(slide_views);
 
-            var strict_views = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
-            strict_views.pack_start(this.strict_prev_view, false, false, 0);
-            strict_views.pack_end(this.strict_next_view, false, false, 0);
+            var strict_views = new Gtk.Grid();
+            strict_views.column_homogeneous = true;
+            strict_views.row_homogeneous = true;
+            strict_views.column_spacing = 10;
+            frame = new Gtk.AspectFrame(null, 0.0f, 0.0f, page_ratio, false);
+            frame.add(this.strict_prev_view);
+            strict_views.attach(frame, 0, 0);
+            frame = new Gtk.AspectFrame(null, 1.0f, 0.0f, page_ratio, false);
+            frame.add(this.strict_next_view);
+            strict_views.attach(frame, 1, 0);
 
             this.overlay_layout.add(this.current_view);
 
-            this.overlay_layout.set_size_request(
-                this.main_view.get_renderer().width / this.gdk_scale,
-                this.main_view.get_renderer().height / this.gdk_scale
-            );
             this.video_surface.set_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK | Gdk.EventMask.POINTER_MOTION_MASK);
 
-            var current_view_and_stricts = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-            current_view_and_stricts.pack_start(overlay_layout, false, false, 0);
-            current_view_and_stricts.pack_start(strict_views, false, false, 0);
 
-            slide_views.pack_start(current_view_and_stricts, true, true, 0);
+            var current_view_and_stricts = new Gtk.Paned(Gtk.Orientation.VERTICAL);
 
-            var nextViewWithNotes = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-            nextViewWithNotes.set_size_request(this.next_allocated_width, -1);
-            this.next_view.halign = Gtk.Align.CENTER;
-            this.next_view.valign = Gtk.Align.CENTER;
-            nextViewWithNotes.pack_start(next_view, false, false, 0);
+            // Height of the window minus the bottom part (icons, timer, etc)
+            var usable_height = (1.0 - 1.0/this.bottom_frac_inv)*this.window_h;
+
+            double wheight1, wheight2;
+            wheight1 = Options.current_height/100.0*usable_height;
+            wheight2 = current_allocated_width/page_ratio;
+            current_view_and_stricts.position = (int) double.min(wheight1, wheight2);
+
+            current_view_and_stricts.wide_handle = true;
+            disable_paned_handle(current_view_and_stricts);
+
+            frame = new Gtk.AspectFrame(null, 0.5f, 0.0f, page_ratio, false);
+            frame.add(overlay_layout);
+            current_view_and_stricts.pack1(frame, true, true);
+            current_view_and_stricts.pack2(strict_views, true, true);
+
+            slide_views.pack1(current_view_and_stricts, true, true);
+
+            var next_view_and_notes = new Gtk.Paned(Gtk.Orientation.VERTICAL);
+
+            // To be exact, the width of Paned handle should be subtracted...
+            var next_allocated_width = this.window_w - current_allocated_width;
+
+            wheight1 = Options.next_height/100.0*usable_height;
+            wheight2 = next_allocated_width/page_ratio;
+            next_view_and_notes.position = (int) double.min(wheight1, wheight2);
+
+            next_view_and_notes.wide_handle = true;
+            disable_paned_handle(next_view_and_notes);
+
+            frame = new Gtk.AspectFrame(null, 0.5f, 0.0f, page_ratio, false);
+            frame.add(next_view);
+            next_view_and_notes.pack1(frame, true, true);
 
             var notes_sw = new Gtk.ScrolledWindow(null, null);
-            notes_sw.set_size_request(this.next_allocated_width, -1);
             notes_sw.add(this.notes_view);
             notes_sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC);
-            nextViewWithNotes.pack_start(notes_sw, true, true, 5);
-            slide_views.pack_start(nextViewWithNotes, true, true, 0);
+            next_view_and_notes.pack2(notes_sw, true, true);
+            slide_views.pack2(next_view_and_notes, true, true);
+
+            var help_sw = create_help_window();
 
             this.slide_stack = new Gtk.Stack();
             this.slide_stack.add_named(slide_views, "slides");
             this.slide_stack.add_named(this.overview, "overview");
+            this.slide_stack.add_named(help_sw, "help");
             this.slide_stack.homogeneous = true;
 
             var bottom_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
-            bottom_row.set_size_request(this.screen_geometry.width, bottom_height);
             bottom_row.homogeneous = true;
-
-            var status = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 2);
-            status.pack_start(this.blank_icon, false, false, 0);
-            status.pack_start(this.hidden_icon, false, false, 0);
-            status.pack_start(this.frozen_icon, false, false, 0);
-            status.pack_start(this.pause_icon, false, false, 0);
-            status.pack_start(this.saved_icon, false, false, 0);
-            status.pack_start(this.loaded_icon, false, false, 0);
-            status.pack_start(this.locked_icon, false, false, 0);
-            status.pack_start(this.highlight_icon, false, false, 0);
-            status.pack_start(this.pen_icon, false, false, 0);
-            status.pack_start(this.eraser_icon, false, false, 0);
 
             this.timer.halign = Gtk.Align.CENTER;
             this.timer.valign = Gtk.Align.END;
 
-            var progress_alignment = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
-            progress_alignment.pack_start(this.prerender_progress);
-            progress_alignment.pack_end(this.slide_progress, false);
-
-            bottom_row.pack_start(status);
+            bottom_row.pack_start(this.status);
             bottom_row.pack_start(this.timer);
-            bottom_row.pack_end(progress_alignment);
+            bottom_row.pack_end(this.slide_progress, false);
 
-            Gtk.Box full_layout = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-            full_layout.set_size_request(this.screen_geometry.width, this.screen_geometry.height);
-            full_layout.pack_start(this.slide_stack, true, true, 0);
-            full_layout.pack_end(bottom_row, false, false, 0);
+            Gtk.Grid full_layout = new Gtk.Grid();
+            full_layout.row_homogeneous = true;
+            full_layout.attach(this.slide_stack, 0, 0, 1, this.bottom_frac_inv - 1);
+            full_layout.attach(bottom_row, 0, this.bottom_frac_inv - 1, 1, 1);
 
             Gtk.Overlay full_overlay = new Gtk.Overlay();
             full_overlay.add_overlay(full_layout);
@@ -558,37 +631,35 @@ namespace pdfpc.Window {
 
             Gtk.Orientation toolbox_orientation = Gtk.Orientation.HORIZONTAL;
             bool tbox_inverse = false;
-            int tb_offset = (int) Math.round(0.1*strict_prev_slide_rect.height);
+            int tb_offset = (int) (0.02*this.window_h);
 
             int tbox_x = 0, tbox_y = 0;
             switch (Options.toolbox_direction) {
                 case Options.ToolboxDirection.LtoR:
                     toolbox_orientation = Gtk.Orientation.HORIZONTAL;
                     tbox_inverse = false;
-                    tbox_x = strict_prev_slide_rect.width + tb_offset;
-                    tbox_y = current_slide_rect.height + tb_offset;
+                    tbox_x = (int) (0.15*this.window_w) + tb_offset;
+                    tbox_y = (int) (0.70*this.window_h) + tb_offset;
                     break;
                 case Options.ToolboxDirection.RtoL:
                     toolbox_orientation = Gtk.Orientation.HORIZONTAL;
                     tbox_inverse = true;
-                    tbox_x = strict_next_slide_rect.width - tb_offset;
-                    tbox_y = current_slide_rect.height + tb_offset;
+                    tbox_x = (int) (0.15*this.window_w) - tb_offset;
+                    tbox_y = (int) (0.70*this.window_h) + tb_offset;
                     break;
                 case Options.ToolboxDirection.TtoB:
                     toolbox_orientation = Gtk.Orientation.VERTICAL;
                     tbox_inverse = false;
-                    tbox_x = current_slide_rect.width + tb_offset;
-                    tbox_y = next_slide_rect.height + tb_offset;
+                    tbox_x = 0*this.window_w + tb_offset;
+                    tbox_y = 0*this.window_h + tb_offset;
                     break;
                 case Options.ToolboxDirection.BtoT:
                     toolbox_orientation = Gtk.Orientation.VERTICAL;
                     tbox_inverse = true;
-                    tbox_x = current_slide_rect.width + tb_offset;
-                    tbox_y = next_slide_rect.height + tb_offset;
+                    tbox_x = 0*this.window_w + tb_offset;
+                    tbox_y = 0*this.window_h + tb_offset;
                     break;
             }
-            tbox_x /= this.gdk_scale;
-            tbox_y /= this.gdk_scale;
             toolbox = new Gtk.Box(toolbox_orientation, 0);
             toolbox.get_style_context().add_class("toolbox");
             toolbox.halign = Gtk.Align.START;
@@ -634,55 +705,55 @@ namespace pdfpc.Window {
             tb.clicked.connect(() => {
                     var state = button_panel.get_child_visible();
                     button_panel.set_child_visible(!state);
-		});
+                });
 
             tb = add_toolbox_button(button_panel, tbox_inverse, "empty.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.set_normal_mode();
-		});
+                    this.controller.set_normal_mode();
+                });
             tb = add_toolbox_button(button_panel, tbox_inverse, "highlight.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.set_pointer_mode();
-		});
+                    this.controller.set_pointer_mode();
+                });
             tb = add_toolbox_button(button_panel, tbox_inverse, "pen.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.set_pen_mode();
-		});
+                    this.controller.set_pen_mode();
+                });
             tb = add_toolbox_button(button_panel, tbox_inverse, "eraser.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.set_eraser_mode();
-		});
+                    this.controller.set_eraser_mode();
+                });
             tb = add_toolbox_button(button_panel, tbox_inverse, "snow.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.toggle_freeze();
-		});
+                    this.controller.toggle_freeze();
+                });
             tb = add_toolbox_button(button_panel, tbox_inverse, "blank.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.fade_to_black();
-		});
+                    this.controller.fade_to_black();
+                });
             tb = add_toolbox_button(button_panel, tbox_inverse, "hidden.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.hide_presentation();
-		});
+                    this.controller.hide_presentation();
+                });
             tb = add_toolbox_button(button_panel, tbox_inverse, "pause.svg");
             tb.clicked.connect(() => {
-		    this.presentation_controller.toggle_pause();
-		});
+                    this.controller.toggle_pause();
+                });
 
             scale_button = add_toolbox_sbutton(button_panel, tbox_inverse,
                 "linewidth.svg");
             scale_button.set_child_visible(false);
             scale_button.value_changed.connect((val) => {
-                this.presentation_controller.set_pen_size(val);
+                this.controller.set_pen_size(val);
             });
 
             color_button = add_toolbox_cbutton(button_panel, tbox_inverse);
             color_button.set_child_visible(false);
             color_button.color_set.connect(() => {
                     var rgba = color_button.rgba;
-                    this.presentation_controller.pen_drawing.pen.set_rgba(rgba);
-                    this.presentation_controller.queue_pen_surface_draws();
-		});
+                    this.controller.pen_drawing.pen.set_rgba(rgba);
+                    this.controller.queue_pen_surface_draws();
+                });
 
             this.toolbox_container = new Gtk.Fixed();
             this.toolbox_container.put(toolbox, tbox_x, tbox_y);
@@ -695,10 +766,7 @@ namespace pdfpc.Window {
 
         public override void show() {
             base.show();
-            Gtk.Allocation allocation;
-            this.get_allocation(out allocation);
-            this.overview.set_available_space(allocation.width,
-                (int) Math.floor(allocation.height * 0.9));
+            this.resize_overview();
         }
 
        /**
@@ -771,18 +839,20 @@ namespace pdfpc.Window {
          * Update the slide count view
          */
         protected void update_slide_count() {
-            this.custom_slide_count(this.metadata.real_slide_to_user_slide(this.presentation_controller.current_slide_number) + 1);
+            int current_user_slide_number =
+                this.controller.current_user_slide_number;
+            this.custom_slide_count(current_user_slide_number + 1);
         }
 
         public void custom_slide_count(int current) {
-            int total = this.presentation_controller.get_end_user_slide();
+            int total = this.metadata.get_end_user_slide();
             this.slide_progress.set_text("%d/%u".printf(current, total));
         }
 
         protected void update_toolbox() {
             toolbox.set_child_visible(Options.toolbox_shown);
 
-            var controller = this.presentation_controller;
+            var controller = this.controller;
 
             var rgba = controller.pen_drawing.pen.get_rgba();
             color_button.set_rgba(rgba);
@@ -793,90 +863,62 @@ namespace pdfpc.Window {
                 controller.is_eraser_active());
         }
 
+        /**
+         * Called on document reload.
+         * TODO: in principle the document geometry may change!
+         */
+        public void on_reload() {
+            this.current_view.invalidate();
+            this.next_view.invalidate();
+            this.strict_next_view.invalidate();
+            this.strict_prev_view.invalidate();
+        }
+
         public void update() {
-            int current_slide_number = this.presentation_controller.current_slide_number;
-            int current_user_slide_number = this.presentation_controller.current_user_slide_number;
-            try {
-                this.current_view.display(current_slide_number);
-                this.next_view.display(this.metadata.user_slide_to_real_slide(
-                    current_user_slide_number + 1));
-                if (this.presentation_controller.skip_next()) {
-                    this.strict_next_view.display(current_slide_number + 1, true);
-                } else {
-                    this.strict_next_view.fade_to_black();
-                }
-                if (this.presentation_controller.skip_previous()) {
-                    this.strict_prev_view.display(current_slide_number - 1, true);
-                } else {
-                    this.strict_prev_view.fade_to_black();
-                }
+            if (!metadata.is_ready) {
+                return;
             }
-            catch( Renderer.RenderError e ) {
-                GLib.printerr("The pdf page %d could not be rendered: %s\n", current_slide_number, e.message);
-                Process.exit(1);
+            int current_slide_number = this.controller.current_slide_number;
+            int current_user_slide_number = this.controller.current_user_slide_number;
+
+            this.current_view.display(current_slide_number);
+            int next_view_slide_offset = 0;
+            if (   !Options.final_slide_overlay
+                || (Options.final_slide_overlay && current_slide_number == this.metadata.user_slide_to_real_slide(current_user_slide_number))
+               ){
+                next_view_slide_offset = 1;
             }
+            this.next_view.display(
+                this.metadata.user_slide_to_real_slide(current_user_slide_number + next_view_slide_offset)
+            );
+            if (this.controller.skip_next()) {
+                this.strict_next_view.disabled = false;
+            } else {
+                this.strict_next_view.disabled = true;
+            }
+            this.strict_next_view.display(current_slide_number + 1);
+            if (this.controller.skip_previous()) {
+                this.strict_prev_view.disabled = false;
+            } else {
+                this.strict_prev_view.disabled = true;
+            }
+            this.strict_prev_view.display(current_slide_number - 1);
+
             this.update_slide_count();
             this.update_note();
-            if (this.timer.is_paused()) {
-                this.pause_icon.show();
-            } else {
-                this.pause_icon.hide();
-            }
-            if (this.presentation_controller.faded_to_black) {
-                this.blank_icon.show();
-            } else {
-                this.blank_icon.hide();
-            }
-            if (this.presentation_controller.hidden) {
-                this.hidden_icon.show();
+
+            this.update_status_icons();
+
+            if (this.controller.hidden) {
                 // Ensure the presenter window remains focused
                 this.present();
-            } else {
-                this.hidden_icon.hide();
             }
-            if (this.presentation_controller.frozen) {
-                this.frozen_icon.show();
-            } else {
-                this.frozen_icon.hide();
-            }
-            if (this.presentation_controller.is_pointer_active()) {
-                this.highlight_icon.show();
-            } else {
-                this.highlight_icon.hide();
-            }
-            if (this.presentation_controller.is_eraser_active()) {
-                this.eraser_icon.show();
-            } else {
-                this.eraser_icon.hide();
-            }
-            if (this.presentation_controller.is_pen_active()) {
-                this.pen_icon.show();
-            } else {
-                this.pen_icon.hide();
-            }
-            this.faded_to_black = false;
+
             this.saved_icon.hide();
             this.loaded_icon.hide();
             this.locked_icon.hide();
 
             this.update_toolbox();
-        }
-
-        /**
-         * Display a specific page
-         */
-        public void goto_page(int page_number) {
-            try {
-                this.current_view.display(page_number);
-                this.next_view.display(page_number + 1);
-            } catch( Renderer.RenderError e ) {
-                GLib.printerr("The pdf page %d could not be rendered: %s\n", page_number, e.message);
-                Process.exit(1);
-            }
-
-            this.update_slide_count();
-            this.update_note();
-            this.blank_icon.hide();
         }
 
         /**
@@ -888,11 +930,11 @@ namespace pdfpc.Window {
                 return;
             }
 
-            this.slide_progress.set_text("/%u".printf(this.presentation_controller.user_n_slides));
+            this.slide_progress.set_text("/%u".printf(this.controller.user_n_slides));
             this.slide_progress.sensitive = true;
             this.slide_progress.grab_focus();
             this.slide_progress.set_position(0);
-            this.presentation_controller.set_ignore_input_events(true);
+            this.controller.set_ignore_input_events(true);
         }
 
         /**
@@ -904,11 +946,16 @@ namespace pdfpc.Window {
                 string input_text = this.slide_progress.text;
                 int destination = int.parse(input_text.substring(0, input_text.index_of("/")));
                 this.slide_progress.sensitive = false;
-                this.presentation_controller.set_ignore_input_events(false);
+                this.controller.set_ignore_input_events(false);
                 if (destination != 0)
-                    this.presentation_controller.goto_user_page(destination);
+                    this.controller.goto_user_page(destination - 1);
                 else
                     this.update_slide_count(); // Reset the display we had before
+                return true;
+            } else if (key.keyval == Gdk.Key.Escape) {
+                this.slide_progress.sensitive = false;
+                this.controller.set_ignore_input_events(false);
+                this.update_slide_count();
                 return true;
             } else {
                 return false;
@@ -933,7 +980,7 @@ namespace pdfpc.Window {
             }
 
             // Disallow editing notes imported from PDF annotations
-            int number = this.presentation_controller.current_user_slide_number;
+            int number = this.controller.current_user_slide_number;
             if (this.metadata.get_notes().is_note_read_only(number)) {
                 blink_lock_icon();
                 return;
@@ -942,7 +989,7 @@ namespace pdfpc.Window {
             this.notes_view.editable = true;
             this.notes_view.cursor_visible = true;
             this.notes_view.grab_focus();
-            this.presentation_controller.set_ignore_input_events(true);
+            this.controller.set_ignore_input_events(true);
         }
 
         /**
@@ -953,8 +1000,8 @@ namespace pdfpc.Window {
                 this.notes_view.editable = false;
                 this.notes_view.cursor_visible = false;
                 this.metadata.get_notes().set_note(this.notes_view.buffer.text,
-                    this.presentation_controller.current_user_slide_number);
-                this.presentation_controller.set_ignore_input_events(false);
+                    this.controller.current_user_slide_number);
+                this.controller.set_ignore_input_events(false);
                 return true;
             } else {
                 return false;
@@ -966,7 +1013,7 @@ namespace pdfpc.Window {
          */
         protected void update_note() {
             string this_note = this.metadata.get_notes().get_note_for_slide(
-                this.presentation_controller.current_user_slide_number);
+                this.controller.current_user_slide_number);
             this.notes_view.buffer.text = this_note;
         }
 
@@ -976,35 +1023,17 @@ namespace pdfpc.Window {
                 return;
             }
 
-            this.overview.current_slide = this.presentation_controller.current_user_slide_number;
+            this.overview.current_slide = this.controller.current_user_slide_number;
             this.slide_stack.set_visible_child_name("overview");
             this.overview.ensure_focus();
         }
 
         public void hide_overview() {
             this.slide_stack.set_visible_child_name("slides");
-            this.overview.ensure_structure();
         }
 
-        /**
-         * Take a cache observer and register it with all prerendering Views
-         * shown on the window.
-         *
-         * Furthermore it is taken care of to add the cache observer to this window
-         * for display, as it is a Image widget after all.
-         */
-        public void set_cache_observer(CacheStatus observer) {
-            observer.monitor_view(this.current_view);
-            observer.monitor_view(this.next_view);
-
-            observer.update_progress.connect(this.prerender_progress.set_fraction);
-            observer.update_complete.connect(this.prerender_finished);
-            this.prerender_progress.show();
-        }
-
-        public void prerender_finished() {
-            this.prerender_progress.opacity = 0;  // hide() causes a flash for re-layout.
-            this.overview.set_cache(this.next_view.get_renderer().cache);
+        public bool is_overview_shown() {
+            return (this.slide_stack.get_visible_child() == this.overview);
         }
 
         /**
@@ -1039,7 +1068,6 @@ namespace pdfpc.Window {
         }
 
         private void set_font_size(int size) {
-
             const string text_css_template = "#notesView { font-size: %dpt; }";
             var css = text_css_template.printf(size);
 
@@ -1047,6 +1075,17 @@ namespace pdfpc.Window {
                 css_provider.load_from_data(css, -1);
             } catch (Error e) {
                 GLib.printerr("Warning: failed to set CSS for notes.\n");
+            }
+        }
+
+        public void show_help_window(bool onoff) {
+            if (onoff) {
+                this.slide_stack.set_visible_child_name("help");
+                this.slide_stack.get_child_by_name("help").grab_focus();
+                this.controller.set_ignore_input_events(true);
+            } else {
+                this.slide_stack.set_visible_child_name("slides");
+                this.controller.set_ignore_input_events(false);
             }
         }
     }

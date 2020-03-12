@@ -2,6 +2,27 @@
 pdfpc Changelog
 ===============
 
+Version 4.4.0
+=============
+
+*Released: February 2020*
+
+- Document reload
+- Resizable windows
+- Toggling between windowed and full screen mode
+- Cheatsheet in application for key/mouse bindings
+- PnP for monitors
+- Improved caching behaviour (pdfpc will not lock the GUI during cold start)
+- Support for XMP meta data and notes (see the CTAN pdfpc package)
+- Hide pointer after a period of inactivity
+- Windowed mode is now a pdfpcrc option
+- Pressure sensitivity of input devices
+- Forward history
+- Support for executing external scripts
+- DBus actions with arguments
+
+- Bug fixes
+
 Version 4.3.4
 =============
 

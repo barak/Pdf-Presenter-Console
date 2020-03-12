@@ -40,7 +40,6 @@ namespace pdfpc {
         public int display_num { get; set; }
         public Gdk.Rectangle rect { get; set; }
         public Window.Fullscreen window { get; set; }
-        public int gdk_scale { get; set; }
     }
 
     /**
@@ -109,9 +108,15 @@ namespace pdfpc {
          */
         protected string temp;
         /**
-         * The screen rectangle associated with the movie.
+         * The presenter screen rectangle associated with the movie.
          */
         protected Gdk.Rectangle rect;
+
+        /**
+         * The movie dimensions (pixels).
+         */
+        protected int video_w;
+        protected int video_h;
 
         /**
          * Data on how the movie playback must fit on the page.
@@ -182,7 +187,7 @@ namespace pdfpc {
         /**
          * Inits  the movie
          */
-        public void init_movie(ActionMapping other, Poppler.Rectangle area,
+        protected void init_movie(ActionMapping other, Poppler.Rectangle area,
                 PresentationController controller, Poppler.Document document,
                 string uri, string? suburi, bool autostart, bool loop, bool noprogress,
                 bool noaudio, int start = 0, int stop = 0, bool temp = false) {
@@ -384,7 +389,7 @@ namespace pdfpc {
 
             foreach (var sink in this.sinks) {
                 var parent = sink.parent as View.Video;
-                parent.remove_video(sink);
+                parent.remove_video();
             }
         }
 
@@ -544,10 +549,11 @@ namespace pdfpc {
         public void on_prepare(Gst.Element overlay, Gst.Caps caps) {
             var info = new Gst.Video.Info();
             info.from_caps(caps);
-            int width = info.width, height = info.height;
-            this.scalex = (double) width / rect.width;
-            this.scaley = (double) height / rect.height;
-            this.vheight = height;
+            this.video_w = info.width;
+            this.video_h = info.height;
+            this.scalex = (double) this.video_w/rect.width;
+            this.scaley = (double) this.video_h/rect.height;
+            this.vheight = this.video_h;
 
             overlay.query_duration(Gst.Format.TIME, out duration);
         }
@@ -654,39 +660,26 @@ namespace pdfpc {
             Gee.List<VideoConf> video_confs = new Gee.ArrayList<VideoConf>();
             while (true) {
                 Gdk.Rectangle rect;
-                int gdk_scale;
                 Window.Fullscreen window;
-                this.controller.overlay_pos(n, this.area, out rect, out gdk_scale, out window);
+                this.controller.overlay_pos(n, this.area, out rect, out window);
                 if (window == null) {
                     break;
                 }
                 VideoConf conf = new VideoConf() {
                     display_num = n,
                     rect = rect,
-                    window = window,
-                    gdk_scale = gdk_scale
+                    window = window
                 };
                 video_confs.add(conf);
 
                 n++;
             }
-            video_confs.sort((a, b) => {
-                if (a.rect.width == b.rect.width) {
-                    return 0;
-                } else if (a.rect.width < b.rect.width) {
-                    return -1;
-                } else {
-                    return 1;
-                }
-            });
-
-            var largest_rect = video_confs.last().rect;
 
             bool notes_mode = (Options.notes_position != null) ? true : false;
             n = 0;
             foreach (var conf in video_confs) {
                 // if --notes passed, hide the video on the presenter screen
-                if (notes_mode && conf.display_num == 0) {
+                if (notes_mode && conf.window.is_presenter) {
                     continue;
                 }
 
@@ -704,8 +697,10 @@ namespace pdfpc {
                 Gst.Element queue = Gst.ElementFactory.make("queue", @"queue$n");
                 bin.add_many(queue, sink);
                 tee.link(queue);
-                if ((conf.display_num == 0 && !notes_mode) || (conf.display_num != 0 && notes_mode)) {
-                    Gst.Element ad_element = this.add_video_control(queue, bin, conf.rect, largest_rect);
+                if ((conf.window.is_presenter && !notes_mode) ||
+                    (!conf.window.is_presenter && notes_mode)) {
+                    Gst.Element ad_element = this.add_video_control(queue, bin,
+                        conf.rect);
                     ad_element.link(sink);
 
                     video_area.add_events(
@@ -723,11 +718,29 @@ namespace pdfpc {
 
                 // mark the video widget on the "frozen" presentation screen
                 // with a custom flag
-                if (conf.display_num == 1 && controller.frozen) {
+                if (!conf.window.is_presenter && controller.frozen) {
                     video_area.set_data("pdfpc_frozen", true);
                 }
 
-                conf.window.video_surface.add_video(video_area, conf.rect);
+                var video_surface = conf.window.video_surface;
+                video_surface.add_video(video_area, conf.rect);
+                video_surface.size_allocate.connect((a) => {
+                        Gdk.Rectangle rect;
+                        Window.Fullscreen window;
+
+                        this.controller.overlay_pos(conf.display_num,
+                            this.area, out rect, out window);
+
+                        // Update the rectangle
+                        conf.rect = rect;
+                        if ((window.is_presenter && !notes_mode) ||
+                            (!window.is_presenter && notes_mode)) {
+                            this.rect = rect;
+                            this.scalex = (double) this.video_w/rect.width;
+                            this.scaley = (double) this.video_h/rect.height;
+                        }
+                        video_surface.resize_video(rect);
+                    });
                 this.sinks.add(video_area);
 
                 n++;
@@ -755,8 +768,8 @@ namespace pdfpc {
         }
 
         /**
-         * Utility function for converting filenames to uris. If file
-         * is not an absolute path, use the pdf file location as a base
+         * Utility function for converting filenames to URI's. If file
+         * is not an absolute path, use the PDF file location as a base
          * directory.
          */
         protected string? filename_to_uri(string file, string pdf_fname) {
@@ -787,7 +800,7 @@ namespace pdfpc {
          * Hook up the elements to draw the controls to the first output leg.
          */
         protected Gst.Element add_video_control(Gst.Element source, Gst.Bin bin,
-            Gdk.Rectangle rect, Gdk.Rectangle video_size_rect) {
+            Gdk.Rectangle rect) {
             dynamic Gst.Element overlay;
             Gst.Element adaptor;
             try {
@@ -811,7 +824,7 @@ namespace pdfpc {
         }
 
         /**
-         * Seek to the time indicated by the mouse's position on the progress bar.
+         * Seek to the time indicated by the mouse position on the progress bar.
          */
         protected int64 mouse_seek(double x, double y) {
             double seek_fraction = (x - this.seek_bar_padding) / (rect.width -
@@ -829,6 +842,7 @@ namespace pdfpc {
             }
             return seek_time;
         }
+
         /**
          * Play the movie, rewinding to the beginning if we had reached the
          * end.
@@ -862,7 +876,11 @@ namespace pdfpc {
          * Set a flag about whether the mouse is currently in the progress bar.
          */
         private void set_mouse_in(double x, double y) {
-            this.in_seek_bar = (x > 0 && x < rect.width && (rect.height - y) > 0 && (rect.height - y) < seek_bar_height);
+            this.in_seek_bar =
+                x > 0 &&
+                x < this.rect.width &&
+                y > this.rect.height - this.seek_bar_height &&
+                y < this.rect.height;
         }
 
         /**
@@ -875,7 +893,7 @@ namespace pdfpc {
         }
 
         /**
-         * Pause if playing, as vice versa.
+         * Pause if playing, and vice versa.
          */
         protected void toggle_play() {
             Gst.State state;

@@ -29,8 +29,8 @@ monitors).
 
 .SH OPTIONS
 .TP
-.BI "\-c, \-\-disable\-cache"
-Disable caching and pre-rendering of slides to save memory at the cost of speed.
+.BI "\-B, \-\-list\-bindings"
+List action bindings defined
 .TP
 .BI "\-C, \-\-time\-of\-day
 Display the time of the day
@@ -53,21 +53,19 @@ Show this help
 Time in minutes, from which on the timer changes its color. (Default: 5 minutes)
 .TP
 .BI "\-L, \-\-list\-actions"
-List actions supported in the config file(s)
+List actions supported
 .TP
 .BI "\-M, \-\-list\-monitors"
 List monitors known to the operating system
 .TP
 .BI "\-n, \-\-notes"=P
-Position of notes on the PDF page. Position can be either left, right, top or bottom. Disable slide auto-grouping (Default: none)
+Position of second-screen beamer notes on the PDF page (left, right, top,
+bottom, or none. Default: none). Note that this disables slide auto-grouping.
 .TP
 .BI "\-N, \-\-no\-install"
 Allow for testing pdfpc without proper installation. Icons, configuration files,
 etc. will be loaded from the source path locations. Mostly intended for
 developers.
-.TP
-.BI "\-p, \-\-persist\-cache"
-Persist the PNG cache on disk for faster startup.
 .TP
 .BI "\-P, \-\-page"
 Go to a specific page directly after startup. In case of overlays, the first slide will be displayed.
@@ -92,12 +90,26 @@ format) from that location.
 .BI "\-W, \-\-wayland\-workaround"
 Enable Wayland-specific workaround. This might fix HiDPI scaling problems.
 .TP
-.BI "\-w, \-\-windowed"
-Run in windowed mode
+.BI "\-w, \-\-windowed"=MODE
+Run in the given windowed mode (presenter|presentation|both|none). The default
+mode is "none" (both windows are fullscreen).
 .TP
-.BI "\-z, \-\-disable\-compression"
-Disable the compression of slide images to trade memory consumption for speed.
-(Avg.  factor 30)
+.BI "\-X, \-\-external-script"=FILENAME
+Specify a script to be executed with the 'X' (Shift+x) key during the
+presentation. The script must be executable but can otherwise be
+written in any language. The script is called with the following
+command line arguments:
+
+\[bu] Name of pdf file
+.br
+\[bu] Total slide count
+.br
+\[bu] Current slide number
+.br
+\[bu] Current user slide number
+
+If the script exits with a non-zero return value, whatever the script
+wrote to stdout is printed in the console. Otherwise nothing is printed.
 .TP
 .BI "\-Z, \-\-size"
 Size of the presentation window in width:height format (forces windowed mode)
@@ -135,9 +147,8 @@ Go to the first slide
 .B End
 Go to the last slide
 .TP
-.B Shift + Backspace
-Go back in history. Note that history is defined by "jump" commands, not by
-normal slide movement.
+.B Shift + Backspace / Shift + Space
+Go back /forward in history.
 .TP
 .B Shift + Home / Shift + End
 Go to the previous / next slide, skipping over overlays that have already been
@@ -182,15 +193,14 @@ the size of pen or eraser
 Clear the drawing on the current page
 .TP
 .B d
-Toggle visibility the drawings; if in the drawing mode (pen/eraser), exit it
-.TP
-.B Shift + 1 / KP_1 ... Shift + 8 / KP_8
-Switch the drawing color to red/orange/yellow/green/blue/violet/black/white,
-respectively.
+Toggle visibility of the drawings; if in the drawing mode (pen/eraser), exit it
 .TP
 .B f
 Freeze the current presentation display (the presenter display is still
 fully active)
+.TP
+.B w
+Toggle between the fullscreen and windowed mode of the presenter screen
 .TP
 .B b
 Turn off the presentation view (i.e.  fill it with a black color)
@@ -221,8 +231,15 @@ below)
 .B Ctrl + e
 Define end slide
 .TP
+.B Ctrl + r
+Reload the presentation (e.g., if the PDF file has been updated)
+.TP
 .B Ctrl + q
 Exit pdfpc
+.TP
+.B ?
+Show a cheat sheet with the keyboard and mouse bindings; press Escape or Return
+to exit it
 .P
 Within the overview mode, the following key bindings are used:
 .TP
@@ -239,14 +256,15 @@ Select previous slide
 Select next slide
 
 .P
-See \fBpdfpcrc\fR(5) if you want to customize the keybindings.
+See \fBpdfpcrc\fR(5) if you want to customize the key or mouse bindings. Please
+note though, that only in the normal mode the mouse bindings are configurable.
 
 .SH FEATURES
 
 .SS Caching / Pre-rendering
 
 .PP
-To allow fast changes between the different slides of the presentation the PDF
+To allow fast changes between the presentation slides, the PDF
 pages are pre-rendered to memory.  The progress bar on the bottom of the
 presenter screen indicates how many percent of the slides have been
 pre-rendered already.  During the initial rendering phase this will slow down
@@ -255,28 +273,16 @@ background.  After the cache is fully primed, however, the changing of slides
 should be much faster, as with normal PDF viewers.
 
 .PP
-As the pre-rendering takes a lot of memory it can be disabled using the
-\-\-disable\-cache switch at the cost of speed.
+To avoid excessive memory consumption, cached are only slides that took a
+significant time to render; this threshold is configurable. In order to further
+reduce memory consumption, the pre-rendered and cached slides are selectively
+compressed in memory. The compression factor is typically 10\-30, however, it
+takes some CPU time to compress and uncompress, so there is a trade-off. Small
+images below a certain (configurable) threshold will not be compressed.
 
 .PP
-It it also possible to store the pre-rendered slides on the disk (see
-\-\-persist-cache).  This speeds up the start of the program if the slide set
-is used next time unchanged.
-
-.SS Cache compression
-
-.PP
-The pre-rendered and cached slides can be compressed in memory to save up some
-memory.  Without compression a set of about 100 PDF pages can easily grow up to
-about 1.5 GB size.  Netbooks with only 1 GB of memory would swap heavily
-if pre-rendering is enabled in such a situation.  The compression is
-enabled by default as it does not harm rendering speed in a noticeable way on
-most systems. It does, however, slow down pre-rendering by about a factor of
-two. If you have got enough memory and want to ensure the fastest possible
-pre-rendering you can disable slide compression by using the \-z switch. But be
-warned that using the uncompressed pre-rendering storage will use about 30 times
-the memory the new compressed storage utilizes (e.g. 50 MB will become about
-1.5 GB).
+Please refer to the \fBpdfpcrc\fR(5) man page for options to fine tune the
+caching algorithm.
 
 .SS Timer
 .PP
@@ -329,7 +335,7 @@ their textual content, no formatting attributes are preserved).  The PDF
 annotations can be made using many PDF editors and even viewers.  These "native"
 PDF notes cannot be edited in pdfpc.
 .PP
-In addition, while in the presentation mode, pressing \[aq]n\[aq] will allow you
+In addition, while in the presentation mode, pressing \[aq]Ctrl + n\[aq] will allow you
 to take notes for the current user slide.  To exit the note editing mode, press
 the Escape key.  Note that while editing a note, the keybindings stop working,
 i.e. you are not able to change slides. These notes are stored in the .pdfpc
@@ -349,7 +355,7 @@ used for making the slides), or only the "pdfpc" ones.
 Pressing the Tab key enters the overview mode, where thumbnails of the slides
 are shown in a grid.  You can select a slide to jump to with the mouse or with
 the arrow keys.  You can also define overlays and the end slide (see next
-sections) in this mode.
+sections) in this mode.  Press Escape to exit the mode without making an change.
 
 .SS Overlays
 
@@ -381,7 +387,7 @@ overlay.  As one typically goes back in a presentation only when looking for a
 concrete slide, this is more convenient.
 
 .PP
-The up and down cursor keys work on the "user slide" basis.
+The Shift + Page up/down key combinations work on the "user slide" basis.
 You can use them to skip the rest of an overlay or to jump to the
 previous user slide, ignoring the state of the current slide.
 
@@ -395,7 +401,7 @@ Pdfpc tries to find these overlays automatically by looking
 into the page labels in the PDF file.  For LaTeX this works correctly at least
 with the beamer class and also modifying the page numbers manually (compiling
 with pdflatex).  If your preferred slide-producing method does not work
-correctly with this detection, you can supply this information using the \[aq]o\[aq] key
+correctly with this detection, you can supply this information using the \[aq]Ctrl + o\[aq] key
 for each slide that is part of an overlay (except the first one!).  The page
 numbering is also adapted.  This information is automatically stored.
 
@@ -406,7 +412,7 @@ slide in the actual presentation.
 Things like bibliographic references or slides referring to specialized
 questions are typical examples.
 Pdfpc lets you define which is the last slide in the
-actual presentation via the \[aq]e\[aq] key.
+actual presentation via the \[aq]Ctrl + e\[aq] key.
 This just changes the progress display in the presenter screen, as to
 have a better overview of how many slides are left.
 
@@ -477,10 +483,21 @@ the color and size of the pen will be indicated by the cursor. The pen size can 
 or decreased using hot keys specified in the key bindings. When the eraser tool is active,
 the size of the cursor indicates the amount to erase.
 
-The color of the pen can be changed through key or mouse bindings.
+The color of the pen can be changed through key bindings or using the toolbox.
 
-If you are using a tablet, the pen or eraser tool will be selected based on whether the tablet
-reports a pen or eraser input device is being used, overriding the normal selection of the drawing tool.
+If you are using a tablet, the pen or eraser tool will be selected based on
+whether the tablet reports a pen or eraser input device is being used,
+overriding the normal selection of the drawing tool. Also for pressure-sensitive
+input devices, the pressure will affect the line width and the eraser size.
+Both these features can be disabled in the configuration file, if desired.
+
+.SS Monitor Plug and Play
+.PP
+Pdfpc can handle monitor plug and play. E.g. if pdfpc was started before the
+presentation screen was attached to the computer, pdfpc can create and show the
+presentation screen after the second screen was attached. This allows the user
+to rehearse the slides and switch to a normal presentation without having the
+full setup at the computer in advance.
 
 .SS pdfpc files
 .PP
@@ -546,10 +563,50 @@ example, to advance to the next slide, run
 dbus-send --type=method_call --session --dest=io.github.pdfpc
  /io/github/pdfpc io.github.pdfpc.TriggerAction string:next
 
-In addition to the \fBTriggerAction\fR method, the pdfpc DBus interface exposes
+For actions that require an argument, use \fBTriggerActionArg\fR, e.g.,
+
+dbus-send --type=method_call --session --dest=io.github.pdfpc
+ /io/github/pdfpc io.github.pdfpc.TriggerActionArg string:switchMode
+ string:pointer
+
+In addition to \fBTriggerAction*\fR, the pdfpc DBus interface exposes
 the \fBGetNotes\fR method, three properties (\fBNumberOfOverlays\fR,
 \fBNumberOfSlides\fR, \fBUrl\fR) and two signals (\fBOverlayChange\fR and
 \fBSlideChange\fR).
+
+.SS LaTeX package
+
+.PP
+A tiny LaTeX package is available for pdfpc at CTAN. It provides a convenient
+way to specify notes and to define certain meta properties of the presentation.
+This functionality is often sufficient to avoid using \fB.pdfpc\fR files, thus
+allowing for preparing fully self-contained presentation slides. The usage is:
+
+.RS
+\\usepackage[options]{pdfpc}
+.RE
+
+The possible options are \fBduration\fR, \fBstarttime\fR, \fBendtime\fR,
+\fBenduserslide\fR, \fBlastminutes\fR, and \fBoverridenote\fR. The first five
+correspond to the similarly named \fB.pdfpc\fR or command-line options (and
+accept arguments in the same formats).
+
+To add a note to a slide:
+
+.RS
+\\pdfpcnote{<Text of a note>}
+.RE
+
+The \fBpdfpc\fR package can be used standalone or together with beamer. In the
+later case, it may be desirable to continue using the \\note command. To this
+end, the \fBoverridenote\fR option should be provided. Please note though, that
+this will work only in simple cases.
+
+If you prefer using full-featured beamer notes rendered alongside the
+presentation (\\setbeameroption{show notes on second screen}), the \fBpdfpc\fR
+package will autodetect it, so using the \fB\-\-notes\fR command-line option is
+unnecessary. To override the autodetection, use the \fBnotesposition\fR option,
+accepting the same values (right/left/top/bottom/none).
 
 .SH BUGS
 

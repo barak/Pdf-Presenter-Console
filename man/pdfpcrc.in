@@ -18,8 +18,9 @@ user-specific one if it exists.
 .PP
 The following commands are accepted:
 .TP
-.B bind <key> <func> [<arg>]
-Bind a key to a function, passing a specified argument for functions which require one
+.B bind <key> <action> [<arg>]
+Bind a key to an action, passing a specified argument for actions that require
+one
 .TP
 .B unbind <key>
 Unbind the given key
@@ -27,8 +28,8 @@ Unbind the given key
 .B unbind_all
 Clear all the key bindings
 .TP
-.B mouse <button> <func>
-Bind a mouse button to a function
+.B mouse <button> <action>
+Bind a mouse button to an action
 .TP
 .B unmouse <button>
 Unbind a mouse button
@@ -37,8 +38,20 @@ Unbind a mouse button
 Clear all the mouse bindings
 
 .PP
-A list of all possible functions can be obtained
-via the \-L command line option of \fBpdfpc\fR(1).
+Key names can be obtained with the help of the \fBxev\fR(1) utility. Note that
+names are case sensitive. Key combinations with modifiers can be specified in
+the form <mod>+<key>, where <mod> is one of S (for shift), C (for control) and
+A/M (for Alt/Meta).
+
+.PP
+A shorthand for specifying key combinations constituting shift and an
+alphabetic character is to simply give the uppercase version of the
+alphabetic character. For example, S+r and R are equivalent.
+
+.PP
+A list of all possible actions can be obtained via the \fB\-L\fR command line
+option of \fBpdfpc\fR(1). Use the \fB\-B\fR command line option to list the
+action bindings defined.
 
 .SS Options
 .PP
@@ -53,23 +66,38 @@ The following option_name's are recognized:
 .B black-on-end
 Add an additional black slide at the end of the presentation (bool, Default is false).
 .TP
+.BI cache-clean-period
+Period (in units of s) to check for expired cached content (int, Default is 60).
+.TP
+.BI cache-expiration
+Time (in units of s) to keep (pre)rendered slides in the cache (int, Default is
+600). Set to a negative value to keep cached slides permanently.
+.TP
+.BI cache-max-rtime
+Maximal time (in units of ms) it takes to render a slide for its cache to be
+protected from expiration (int, Default is 1000).
+.TP
+.BI cache-min-rtime
+Minimal time (in units of ms) it takes to render a slide for it to be cached
+(int, Default is 10).
+.TP
+.BI cache-max-usize
+Maximal size (in units of kB) of a slide image to store it uncompressed in the
+cache (int, Default is 256).
+.TP
 .B current-height
 Percentage of the height of the presenter screen to be used for the current slide (int, Default is 80).
 .TP
 .B current-size
 Percentage of the presenter screen to be used for the current slide (int, Default is 60).
 .TP
-.BI disable-caching
-see
-.B \fBpdfpc\fR(1)
-.TP
-.BI disable-compression
-see
-.B \fBpdfpc\fR(1)
-.TP
 .BI disable-input-autodetection
 Do not automatically detect type (pen or eraser) of tablet input devices (bool,
 Default is false).
+.TP
+.BI disable-input-pressure
+Ignore pressure sensitivity of tablet input devices (pen or eraser) even when
+it is supported by the hardware (bool, Default is false).
 .TP
 .BI disable-scrolling
 Disable scrolling events on the presenter window (bool, Default is false).
@@ -78,6 +106,11 @@ Disable scrolling events on the presenter window (bool, Default is false).
 Try loading video subtitle files automatically. For each video media, pdfpc will
 append ".srt" to the media URI and attempt to load a subtitle file (in the SRT
 format) from that location (bool, Default is false).
+.TP
+.B final-slide
+Show the final slide of an overlay group instead of the next slide. If the
+user reaches the last slide of the overlay group the next slide will be shown
+again.
 .TP
 .B move-on-mapped
 Dual-monitor full-screen window placement is a tricky business. Some window
@@ -99,6 +132,15 @@ Set the pointer opacity in percent (int, default is 50).
 .TP
 .B pointer-size
 Set the initial pointer size, in pixels (int, default is 10).
+.TP
+.B prerender-delay
+Delay (in seconds) to launch the pre-rendering process after a slide change
+(int, default is 4).
+.TP
+.B prerender-slides
+Number of slides ahead of the current one to pre-render (int, default is 2). Set
+to 0 to disable the pre-rendering; set to a negative number to pre-render all at
+once.
 .TP
 .B presentation-screen
 Screen to be used for the presentation (output name, see e.g. "xrandr --listmonitors").
@@ -127,27 +169,22 @@ right-to-left, top-to-bottom, or botton-to-top, respectively (Default is LtoR).
 .TP
 .B toolbox-minimized
 Set the initial toolbox state minimized (bool, Default is false).
+.TP
+.B windowed-mode
+Set the initial windowed mode: none, presenter, presentation, or both (Default
+is none).
 
 .SH EXAMPLES
 
 .PP
-Key names can be obtained with the help of the xev utility. Note that
-names are case sensitive. Modifiers can be specified in the form
-<mod>+<key> where <mod> is one of S (for shift), C (for control) and
-A/M (for Alt/Meta). E.g.
+To change the drawing pen color using the numerical pad keys:
 
 .RS
-bind S+Next    next10
-.RE
-
-.PP
-A shorthand for specifying key combinations constituting shift and an
-alphabetic character is to simply give the uppercase version of the
-alphabetic character. For example, to bind <shift>+r to the 'reset'
-function, use
-
-.RS
-bind R reset
+bind S+KP_1    setPenColor  red
+.br
+bind S+KP_2    setPenColor  green
+.br
+bind S+KP_3    setPenColor  blue
 .RE
 
 .PP
@@ -165,9 +202,9 @@ option black-on-end true
 System-wide configuration file
 .RE
 .PP
-.B $XDG_CONFIG_DIR/pdfpc/pdfpcrc
+.B $XDG_CONFIG_HOME/pdfpc/pdfpcrc
 .RS 4
-User configuration file (if $XDG_CONFIG_DIR is not set, $HOME/.config will be
+User configuration file (if $XDG_CONFIG_HOME is not set, $HOME/.config will be
 used).
 
 

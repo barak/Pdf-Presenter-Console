@@ -37,6 +37,13 @@ namespace pdfpc {
         }
 
         /**
+         * Commandline option enabeling the execution of external
+         * scripts. Only the scripts explicitly given on the
+         * commandline can be executed.
+         */
+        public static string external_script = "none";
+        
+        /**
          * Commandline option specifying if the presenter and presentation screen
          * should be switched.
          */
@@ -50,7 +57,7 @@ namespace pdfpc {
         /**
          * Commandline option to run in windowed mode
          */
-        public static bool windowed = false;
+        public static string windowed = "none";
 
         /**
          * Commandline option to enable Wayland specific scaling workarounds
@@ -58,16 +65,47 @@ namespace pdfpc {
         public static bool wayland_workaround = false;
 
         /**
-         * Commandline option which allows the complete disabling of slide caching
+         * Undocumented on purpose...
          */
-        public static bool disable_caching = false;
+        public static bool cache_debug = false;
 
         /**
-         * Commandline option to disable the compression of cached slides. This
-         * trades speed for memory. A lot of memory ;) It's about factor 30
-         * bigger for normal presentations.
+         * Periodicity with which the cache cleaner is fired [s]
          */
-        public static bool disable_cache_compression = false;
+        public static int cache_clean_period = 60;
+
+        /**
+         * Time duration for (pre)rendered pages to be kept in cache [s]
+         */
+        public static int cache_expiration = 600;
+
+        /**
+         * Config option defining maximal render time of slide for its cache
+         * to be never evicted [ms]
+         */
+        public static int cache_max_rtime = 1000;
+
+        /**
+         * Config option defining minimal render time of slide to be cached [ms]
+         */
+        public static int cache_min_rtime = 10;
+
+        /**
+         * Config option defining maximal slide size to be stored uncompressed
+         * [kB]
+         */
+        public static int cache_max_usize = 256;
+
+        /**
+         * Delay before starting prerendering consecutive slides [s]
+         */
+        public static int prerender_delay = 4;
+
+        /**
+         * Number of slides ahead of the current one to prerender;
+         * 0 to disable, negative => prerender all
+         */
+        public static int prerender_slides = 2;
 
         /**
          * Config option to enable a workaround for fullscreen window placement
@@ -81,14 +119,14 @@ namespace pdfpc {
         public static bool disable_input_autodetection = false;
 
         /**
+         * Config option to disable pressure sensitivity of tablet pens/erasers
+         */
+        public static bool disable_input_pressure = false;
+
+        /**
          * Config option to disable scrolling events on the presenter window.
          */
         public static bool disable_scrolling = false;
-
-        /**
-         * Commandline option to persist the PNG cache to disk.
-         */
-        public static bool persist_cache = false;
 
         /**
          * Commandline option to disable the auto detection of overlay slides
@@ -165,6 +203,11 @@ namespace pdfpc {
         public static bool list_actions = false;
 
         /**
+         * Show the defined action bindings
+         */
+        public static bool list_bindings = false;
+
+        /**
          * Show the available monitors(s)
          */
         public static bool list_monitors = false;
@@ -228,6 +271,12 @@ namespace pdfpc {
          * Test pdfpc without installation
          */
         public static bool no_install = false;
+
+        /**
+         * Show the final slide of each overlay in "next slide" view
+         * instead of the next slide.
+         */
+        public static bool final_slide_overlay = false;
 
         public class BindTuple {
             public string type;

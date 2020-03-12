@@ -39,17 +39,18 @@ namespace pdfpc.Window {
         protected Gtk.IconView slides_view;
 
         /**
-         * We will need the metadata mainly for converting from user slides to
-         * real slides.
+         * Metadata of the slides
          */
-        protected Metadata.Pdf metadata;
+        protected Metadata.Pdf metadata {
+            get {
+                return this.controller.metadata;
+            }
+        }
 
         /**
          * How many (user) slides we have.
          */
         protected int n_slides = 0;
-
-        protected int last_structure_n_slides = 0;
 
         /**
          * The target height and width of the scaled images, a bit smaller than
@@ -59,28 +60,9 @@ namespace pdfpc.Window {
         protected int target_height;
 
         /**
-         * We render the previews one at a time in idle times.
-         */
-        protected int next_undone_preview = 0;
-        protected uint idle_id = 0;
-
-        /**
-         * The cache we get the images from. It is a reference because the user
-         * can deactivate the cache on the command line. In this case we show
-         * just slide numbers, which is not really so much useful.
-         */
-        protected Renderer.Cache.Base? cache = null;
-
-        /**
          * The presentation controller
          */
-        protected PresentationController presentation_controller;
-
-        /**
-         * The presenter. We have a reference here to update the current slide
-         * display.
-         */
-        protected Presenter presenter;
+        protected PresentationController controller;
 
         /**
          * The maximal size of the slides_view.
@@ -104,7 +86,7 @@ namespace pdfpc.Window {
         /**
          * The used cell renderer, for later usage
          */
-        private CellRendererHighlight renderer;
+        private CellRendererHighlight cell_renderer;
 
         /*
          * When the section changes, we need to update the current slide number.
@@ -116,7 +98,6 @@ namespace pdfpc.Window {
                 var tp = ltp.data;
                 if (tp.get_indices() != null) {  // Seg fault if we save tp.get_indices locally
                     this._current_slide = tp.get_indices()[0];
-                    this.presenter.custom_slide_count(this._current_slide + 1);
                     return;
                 }
             }
@@ -127,37 +108,35 @@ namespace pdfpc.Window {
         /**
          * Constructor
          */
-        public Overview( Metadata.Pdf metadata, PresentationController presentation_controller, Presenter presenter ) {
+        public Overview(PresentationController controller) {
+            this.controller = controller;
+
             this.get_style_context().add_class("overviewWindow");
 
             this.slides = new Gtk.ListStore(1, typeof(int));
+
             this.slides_view = new Gtk.IconView.with_model(this.slides);
             this.slides_view.selection_mode = Gtk.SelectionMode.SINGLE;
             this.slides_view.halign = Gtk.Align.CENTER;
-            this.renderer = new CellRendererHighlight();
-            this.renderer.metadata = metadata;
+
+            this.cell_renderer = new CellRendererHighlight();
+            this.cell_renderer.metadata = metadata;
+
             Gtk.StyleContext style_context = this.get_style_context();
             Pango.FontDescription font_description;
             style_context.get(style_context.get_state(), "font", out font_description, null);
-            this.renderer.font_description = font_description;
+            this.cell_renderer.font_description = font_description;
 
-            this.slides_view.pack_start(renderer, true);
-            this.slides_view.add_attribute(renderer, "slide_id", 0);
+            this.slides_view.pack_start(cell_renderer, true);
+            this.slides_view.add_attribute(cell_renderer, "slide_id", 0);
             this.slides_view.set_item_padding(0);
-            this.slides_view.show();
             this.add(this.slides_view);
 
-            this.metadata = metadata;
-            this.presentation_controller = presentation_controller;
-            this.presenter = presenter;
-
-            this.slides_view.motion_notify_event.connect(this.presenter.on_mouse_move);
             this.slides_view.motion_notify_event.connect(this.on_mouse_move);
             this.slides_view.button_release_event.connect(this.on_mouse_release);
             this.slides_view.key_press_event.connect(this.on_key_press);
             this.slides_view.selection_changed.connect(this.on_selection_changed);
             this.key_press_event.connect((event) => this.slides_view.key_press_event(event));
-
         }
 
         public void set_available_space(int width, int height) {
@@ -177,20 +156,14 @@ namespace pdfpc.Window {
             this.slides_view.grab_focus();
         }
 
-        /*
-         * Recalculate the structure, if needed.
-         */
-        public void ensure_structure() {
-            if (this.n_slides != this.last_structure_n_slides) {
-                this.prepare_layout();
-            }
-        }
-
         /**
          * Figure out the sizes for the icons, and create entries in slides
          * for all the slides.
          */
         protected void prepare_layout() {
+            if (!this.metadata.is_ready) {
+                return;
+            }
             if (this.max_width == -1) {
                 return;
             }
@@ -250,28 +223,15 @@ namespace pdfpc.Window {
                 full_height = this.max_height;
             }
 
-            this.last_structure_n_slides = this.n_slides;
-
-            this.renderer.slide_width = this.target_width;
-            this.renderer.slide_height = this.target_height;
+            this.cell_renderer.slide_width = this.target_width;
+            this.cell_renderer.slide_height = this.target_height;
 
             this.slides.clear();
-            var iter = Gtk.TreeIter();
+            Gtk.TreeIter iter;
             for (int i = 0; i < this.n_slides; i++) {
                 this.slides.append(out iter);
                 this.slides.set_value(iter, 0, i);
             }
-        }
-
-        /**
-         * Gives the cache to retrieve the images from. The caching process
-         * itself should already be finished.
-         */
-        public void set_cache(Renderer.Cache.Base cache) {
-            this.cache = cache;
-            this.renderer.cache = cache;
-            // force redraw if the cache is there
-            this.slides_view.queue_draw();
         }
 
         /**
@@ -297,7 +257,7 @@ namespace pdfpc.Window {
          */
         public void remove_current(int newn) {
             this.n_slides = newn;
-            var iter = Gtk.TreeIter();
+            Gtk.TreeIter iter;
             this.slides.get_iter_from_string(out iter, @"$(this.current_slide)");
 #if VALA_0_36
             // Updated bindings in Vala 0.36: "iter" param of ListStore.remove() marked as ref
@@ -318,23 +278,27 @@ namespace pdfpc.Window {
         public bool on_key_press(Gtk.Widget source, Gdk.EventKey key) {
             bool handled = false;
             switch (key.keyval) {
-                case 0xff51: /* Cursor left */
-                case 0xff55: /* Page Up */
+                case Gdk.Key.Left:
+                case Gdk.Key.Page_Up:
                     if (this.current_slide > 0) {
                         this.current_slide -= 1;
                     }
                     handled = true;
                     break;
-                case 0xff53: /* Cursor right */
-                case 0xff56: /* Page down */
+                case Gdk.Key.Right:
+                case Gdk.Key.Page_Down:
                     if (this.current_slide < this.n_slides - 1) {
                         this.current_slide += 1;
                     }
                     handled = true;
                     break;
-                case 0xff0d: /* Return */
+                case Gdk.Key.Return:
                     bool gotoFirst = (key.state & Gdk.ModifierType.SHIFT_MASK) != 0;
-                    this.presentation_controller.goto_user_page(this.current_slide + 1, !gotoFirst);
+                    this.controller.goto_user_page(this.current_slide, !gotoFirst);
+                    handled = true;
+                    break;
+                case Gdk.Key.Escape:
+                    this.controller.controllables_hide_overview();
                     handled = true;
                     break;
             }
@@ -362,7 +326,7 @@ namespace pdfpc.Window {
         public bool on_mouse_release(Gdk.EventButton event) {
             if (event.button == 1) {
                 bool gotoFirst = (event.state & Gdk.ModifierType.SHIFT_MASK) != 0;
-                this.presentation_controller.goto_user_page(this.current_slide + 1, !gotoFirst);
+                this.controller.goto_user_page(this.current_slide, !gotoFirst);
             }
             return false;
         }
@@ -372,9 +336,8 @@ namespace pdfpc.Window {
      * Render a surface that is slightly shaded, unless it is the selected one.
      */
     class CellRendererHighlight : Gtk.CellRenderer {
-        public int slide_id { get; set; }
+        protected int slide_id { get; set; }
 
-        public Renderer.Cache.Base? cache { get; set; }
         public Pango.FontDescription font_description { get; set; }
         public Metadata.Pdf metadata { get; set; }
         public int slide_width { get; set; }
@@ -392,13 +355,25 @@ namespace pdfpc.Window {
         public override void render(Cairo.Context cr, Gtk.Widget widget,
                                     Gdk.Rectangle background_area, Gdk.Rectangle cell_area,
                                     Gtk.CellRendererState flags) {
+            var renderer = this.metadata.renderer;
+            Cairo.ImageSurface slide_to_fill = null;
+
+            slide_to_fill = null;
+            try {
+                var real_slide_id =
+                    metadata.user_slide_to_real_slide(this.slide_id, true);
+                slide_to_fill = renderer.render(real_slide_id,
+                    Metadata.Area.CONTENT, slide_width, slide_height,
+                    true, true);
+            } catch (Renderer.RenderError e) {
+                ;
+            }
             // nothing to show
-            if (cache == null) {
+            if (slide_to_fill == null) {
                 cr.set_source_rgba(0.5, 0.5, 0.5, 1);
                 cr.rectangle(cell_area.x, cell_area.y, cell_area.width, cell_area.height);
                 cr.fill();
             } else {
-                var slide_to_fill = this.cache.retrieve(metadata.user_slide_to_real_slide(this.slide_id));
                 double scale_factor = (double)slide_width/slide_to_fill.get_width();
                 cr.scale(scale_factor, scale_factor);
                 cr.set_source_surface(slide_to_fill, (double)cell_area.x/scale_factor, (double)cell_area.y/scale_factor);

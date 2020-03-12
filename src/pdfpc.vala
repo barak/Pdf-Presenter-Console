@@ -42,19 +42,12 @@ namespace pdfpc {
         private PresentationController controller;
 
         /**
-         * CacheStatus widget, which coordinates all the information about
-         * cached slides to provide a visual feedback to the user about the
-         * rendering state
-         */
-        private CacheStatus cache_status;
-
-        /**
          * Commandline option parser entry definitions
          */
         const OptionEntry[] options = {
-            {"disable-cache", 'c', 0, 0,
-                ref Options.disable_caching,
-                "Disable caching and pre-rendering of slides", null},
+            {"list-bindings", 'B', 0, 0,
+                ref Options.list_bindings,
+                "List action bindings defined", null},
             {"time-of-day", 'C', 0, 0,
                 ref Options.use_time_of_day,
                 "Use the current time for the timer", null},
@@ -82,9 +75,6 @@ namespace pdfpc {
             {"no-install", 'N', 0, 0,
                 ref Options.no_install,
                 "Test pdfpc without installation", null},
-            {"persist-cache", 'p', 0, 0,
-                ref Options.persist_cache,
-                "Keep the cache on disk for faster startup", null},
             {"page", 'P', 0, OptionArg.INT,
                 ref Options.page,
                 "Go to page number N directly after startup", "N"},
@@ -106,15 +96,15 @@ namespace pdfpc {
             {"version", 'v', 0, 0,
                 ref Options.version,
                 "Output version information and exit", null},
-            {"windowed", 'w', 0, 0,
+            {"windowed", 'w', 0, OptionArg.STRING,
                 ref Options.windowed,
-                "Run in the windowed mode", null},
+                "Run in the given windowed mode", "MODE"},
             {"wayland-workaround", 'W', 0, 0,
                 ref Options.wayland_workaround,
                 "Enable Wayland-specific workaround", null},
-            {"disable-compression", 'z', 0, 0,
-                ref Options.disable_cache_compression,
-                "Disable compression of the cached slide images", null},
+            {"external-script", 'X', 0, OptionArg.STRING,
+                ref Options.external_script,
+                "Enable execution of an external script", "file"},
             {"size", 'Z', 0, OptionArg.STRING,
                 ref Options.size,
                 "Size of the presentation window (implies \"-w\")", "W:H"},
@@ -157,8 +147,8 @@ namespace pdfpc {
          * Print version string and copyright statement
          */
         private void print_version() {
-            GLib.print("pdfpc v4.3.4\n"
-                     + "Copyright (C) 2010-2019 see CONTRIBUTORS\n\n"
+            GLib.print("pdfpc v4.4.0\n"
+                     + "Copyright (C) 2010-2020 see CONTRIBUTORS\n\n"
                      + "License GPLv2: GNU GPL version 2 <http://gnu.org/licenses/gpl-2.0.html>.\n"
                      + "This is free software: you are free to change and redistribute it.\n"
                      + "There is NO WARRANTY, to the extent permitted by law.\n");
@@ -206,28 +196,6 @@ namespace pdfpc {
         }
 
         /**
-         * Create and return a PresenterWindow using the specified monitor
-         * while displaying the given file
-         */
-        private Window.Presenter create_presenter(Metadata.Pdf metadata, int monitor) {
-            var presenter = new Window.Presenter(metadata, monitor, this.controller);
-            presenter.set_cache_observer(this.cache_status);
-
-            return presenter;
-        }
-
-        /**
-         * Create and return a PresentationWindow using the specified monitor
-         * while displaying the given file
-         */
-        private Window.Presentation create_presentation(Metadata.Pdf metadata, int monitor, int width = -1, int height = -1) {
-            var presentation = new Window.Presentation(metadata, monitor, this.controller, width, height);
-            presentation.set_cache_observer(this.cache_status);
-
-            return presentation;
-        }
-
-        /**
          * Main application function, which instantiates the windows and
          * initializes the Gtk system.
          */
@@ -264,11 +232,6 @@ namespace pdfpc {
                 Process.exit(0);
             }
 
-            if (Options.notes_position != null) {
-                Options.disable_auto_grouping = true;
-                GLib.printerr("--notes option detected. Disable auto grouping.\n");
-            }
-
             // if pdfpc runs at a tablet we force the toolbox to be shown
             var seat = display.get_default_seat();
             var touchSeats = seat.get_slaves(Gdk.SeatCapabilities.TOUCH);
@@ -293,29 +256,14 @@ namespace pdfpc {
                 GLib.printerr("Loaded pdfpcrc from legacy location. Please move your config file to %s\n", userConfig);
             }
 
+            // with prerendering enabled, it makes no sense not to cache a slide
+            if (Options.prerender_slides != 0) {
+                Options.cache_min_rtime = 0;
+            }
+
 #if MOVIES
             Gst.init(ref args);
 #endif
-            if (Options.list_actions) {
-                GLib.print("Config file commands accepted by pdfpc:\n");
-                string[] actions = PresentationController.getActionDescriptions();
-                for (int i = 0; i < actions.length; i+=2) {
-                    string tabAlignment = "\t";
-                    if (actions[i].length < 12)
-                        tabAlignment += "\t";
-                    GLib.print("    %s%s=> %s\n", actions[i], tabAlignment, actions[i+1]);
-                }
-
-                return;
-            }
-            if (pdfFilename == null) {
-                GLib.printerr("No pdf file given\n");
-                Process.exit(1);
-            } else if (!GLib.FileUtils.test(pdfFilename, (GLib.FileTest.IS_REGULAR))) {
-                GLib.printerr("Pdf file \"%s\" not found\n", pdfFilename);
-                Process.exit(1);
-            }
-
             // parse size option
             // should be in the width:height format
 
@@ -332,61 +280,146 @@ namespace pdfpc {
 
                 }
 
-                Options.windowed = true;
+                Options.windowed = "both";
             }
 
-            string cwd = GLib.Environment.get_current_dir();
-            if (!GLib.Path.is_absolute(pdfFilename)) {
-                pdfFilename = GLib.Path.build_filename(cwd, pdfFilename);
-            }
-            var pdfpc_location = Options.pdfpc_location;
-            if (pdfpc_location != null && !GLib.Path.is_absolute(pdfpc_location)) {
-                pdfpc_location = GLib.Path.build_filename(cwd, pdfpc_location);
-            }
-
-            if (pdfpc_location != null && !GLib.FileUtils.test(pdfpc_location, (GLib.FileTest.IS_REGULAR))) {
-                GLib.printerr("Can't find custom pdfpc file at %s\n", pdfpc_location);
+            bool presenter_windowed = false;
+            bool presentation_windowed = false;
+            switch (Options.windowed) {
+            case "none":
+                break;
+            case "presenter":
+                presenter_windowed = true;
+                break;
+            case "presentation":
+                presentation_windowed = true;
+                break;
+            case "both":
+                presenter_windowed = true;
+                presentation_windowed = true;
+                break;
+            default:
+                GLib.printerr("Unknown windowed mode \"%s\"\n",
+                    Options.windowed);
                 Process.exit(1);
             }
 
-            var metadata = new Metadata.Pdf(pdfFilename, pdfpc_location);
+            // Initialize the master controller
+            this.controller = new PresentationController();
 
-            // Initialize global controller and CacheStatus, to manage
-            // crosscutting concerns between the different windows.
-            this.controller = new PresentationController( metadata, Options.black_on_end );
-            this.cache_status = new CacheStatus();
+            if (Options.list_actions) {
+                GLib.print("Actions supported by pdfpc:\n");
+                var actions = this.controller.get_action_descriptions();
+                for (int i = 0; i < actions.length; i += 2) {
+                    string tabAlignment = "\t";
+                    if (actions[i].length < 12) {
+                        tabAlignment += "\t";
+                    }
+                    GLib.print("    %s%s=> %s\n",
+                        actions[i], tabAlignment, actions[i+1]);
+                }
+
+                return;
+            }
+
+            if (Options.list_bindings) {
+                GLib.print("Action bindings defined:\n");
+                var actions = this.controller.get_action_bindings();
+                for (int i = 0; i < actions.length; i += 2) {
+                    string tabAlignment = "\t";
+                    if (actions[i].length < 12) {
+                        tabAlignment += "\t";
+                    }
+                    GLib.print("    %s%s<= %s\n",
+                        actions[i], tabAlignment, actions[i+1]);
+                }
+
+                return;
+            }
+
+            if (pdfFilename == null) {
+                GLib.printerr("No pdf file given\n");
+                Process.exit(1);
+            } else if (!GLib.FileUtils.test(pdfFilename,
+                (GLib.FileTest.IS_REGULAR))) {
+                GLib.printerr("Pdf file \"%s\" not found\n", pdfFilename);
+                Process.exit(1);
+            }
+
+            var metadata = new Metadata.Pdf(pdfFilename);
+            this.controller.metadata = metadata;
 
             set_styling();
 
             int primary_monitor_num = 0, secondary_monitor_num = 0;
             int presenter_monitor = -1, presentation_monitor = -1;
             int n_monitors = display.get_n_monitors();
-            bool by_output = (Options.presentation_screen != null) || (Options.presenter_screen != null);
             for (int i = 0; i < n_monitors; i++) {
-                // Not obvious what's right to do if n_monitors > 2...
-                // But let's be realistic :)
-                if ((by_output && Options.presenter_screen == display.get_monitor(i).get_model())
-                    || display.get_monitor(i).is_primary()) {
+                // First, try to satisfy user's preferences
+                var monitor_model = display.get_monitor(i).get_model();
+                if (Options.presenter_screen != null &&
+                    Options.presenter_screen == monitor_model) {
+                    presenter_monitor = i;
+                }
+                if (Options.presentation_screen != null &&
+                    Options.presentation_screen == monitor_model) {
+                    presentation_monitor = i;
+                }
+                if (presentation_monitor >= 0 && presenter_monitor >= 0) {
+                    break;
+                }
+
+                // Also, identify the primary and secondary monitors as the
+                // fallback
+                if (display.get_monitor(i).is_primary()) {
                     primary_monitor_num = i;
-                } else if (!by_output || Options.presentation_screen == display.get_monitor(i).get_model()) {
+                } else {
                     secondary_monitor_num = i;
                 }
             }
-            if (!Options.display_switch) {
-                presenter_monitor    = primary_monitor_num;
-                presentation_monitor = secondary_monitor_num;
-            } else {
-                presenter_monitor    = secondary_monitor_num;
-                presentation_monitor = primary_monitor_num;
+
+            // Bail out if an explicitly requested monitor is not found
+            if (Options.presenter_screen != null &&
+                presenter_monitor == -1) {
+                GLib.printerr("Monitor \"%s\" not found\n",
+                    Options.presenter_screen);
+                Process.exit(1);
+            }
+            if (Options.presentation_screen != null &&
+                presentation_monitor == -1) {
+                GLib.printerr("Monitor \"%s\" not found\n",
+                    Options.presentation_screen);
+                Process.exit(1);
             }
 
-            if (!Options.single_screen || !Options.display_switch) {
-                this.controller.presenter = this.create_presenter(metadata,
-                    presenter_monitor);
+            // Fallback monitor assignment - presenter on the primary,
+            // presentation on the secondary; swap if asked to
+            if (presenter_monitor == -1) {
+                presenter_monitor = !Options.display_switch ?
+                    primary_monitor_num:secondary_monitor_num;
             }
-            if (!Options.single_screen || Options.display_switch) {
-                this.controller.presentation = this.create_presentation(metadata,
-                    presentation_monitor, width, height);
+            if (presentation_monitor == -1) {
+                presentation_monitor = !Options.display_switch ?
+                    secondary_monitor_num:primary_monitor_num;
+            }
+
+            // Force single-screen mode when there is only one physical monitor
+            // present - unless running in the windowed mode
+            bool single_screen_mode = (Options.single_screen ||
+                (n_monitors == 1 && Options.windowed != "both"));
+
+            // Create the needed windows
+            if (!single_screen_mode || !Options.display_switch) {
+                this.controller.presenter =
+                    new Window.Presenter(this.controller,
+                        presenter_monitor, presenter_windowed);
+
+            }
+            if (!single_screen_mode || Options.display_switch) {
+                this.controller.presentation =
+                    new Window.Presentation(this.controller,
+                        presentation_monitor, presentation_windowed,
+                        width, height);
             }
 
             // The windows are always displayed at last to be sure all caches
@@ -395,7 +428,6 @@ namespace pdfpc {
                 this.controller.presentation.show_all();
                 this.controller.presentation.update();
             }
-
             if (this.controller.presenter != null) {
                 this.controller.presenter.show_all();
                 this.controller.presenter.update();
@@ -405,12 +437,65 @@ namespace pdfpc {
                 Options.page <= metadata.get_end_user_slide()) {
                 int u = metadata.user_slide_to_real_slide(Options.page - 1,
                     false);
-                this.controller.page_change_request(u, false);
+                this.controller.switch_to_slide_number(u, true);
             } else {
                 GLib.printerr("Argument --page/-P must be between 1 and %d\n",
                     metadata.get_end_user_slide());
                 Process.exit(1);
             }
+
+            // Handle monitor added/removed events.
+            // We assume only the presentation screen can be PnP.
+            display.monitor_added.connect((m) => {
+                    GLib.print("Monitor %s added\n", m.get_model());
+                    if (Options.single_screen) {
+                        return;
+                    }
+
+                    var controller = this.controller;
+                    var presentation = controller.presentation;
+                    if (presentation == null) {
+                        // Create the presentation window if not done yet
+                        n_monitors = display.get_n_monitors();
+                        for (int i = 0; i < n_monitors; i++) {
+                            if (display.get_monitor(i) == m) {
+                                controller.presentation =
+                                    new Window.Presentation(controller,
+                                        i, presentation_windowed,
+                                        width, height);
+                                controller.presentation.show_all();
+                                controller.presentation.update();
+                                break;
+                            }
+                        }
+                    } else if (!presentation.is_monitor_connected()) {
+                        presentation.connect_monitor(m);
+                        // Make sure it is not hidden
+                        if (controller.hidden) {
+                            controller.hide_presentation();
+                        }
+                    } else {
+                        // Everything is connected already; is this a 3rd+
+                        // monitor? Do nothing for now.
+                    }
+                });
+
+            display.monitor_removed.connect((m) => {
+                    GLib.print("Monitor %s removed\n", m.get_model());
+                    if (Options.single_screen) {
+                        return;
+                    }
+
+                    var controller = this.controller;
+                    var presentation = controller.presentation;
+                    if (presentation != null && presentation.monitor == m) {
+                        // Make sure it is hidden
+                        if (!controller.hidden) {
+                            controller.hide_presentation();
+                        }
+                        presentation.connect_monitor(null);
+                    }
+                });
 
             // Enter the Glib eventloop
             // Everything from this point on is completely signal based

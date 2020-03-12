@@ -34,20 +34,44 @@ namespace pdfpc.Window {
      */
     public class Fullscreen : Gtk.Window {
         /**
-         * The geometry data of the screen this window is on
+         * The registered PresentationController
          */
-        protected Gdk.Rectangle screen_geometry;
+        public PresentationController controller {
+            get; protected set;
+        }
+
+        /**
+         * Metadata of the slides
+         */
+        protected Metadata.Pdf metadata {
+            get {
+                return this.controller.metadata;
+            }
+        }
+
+        /**
+         * Whether the instance is presenter
+         */
+        public bool is_presenter {
+            get; protected set;
+        }
+
+        /**
+         * The geometry of this window
+         */
+        protected int window_w;
+        protected int window_h;
+
+        /**
+         * Currently selected windowed (!=fullscreen) mode
+         */
+        protected bool windowed;
 
         /**
          * Timer id which monitors mouse motion to hide the cursor after 5
          * seconds of inactivity
          */
         protected uint hide_cursor_timeout = 0;
-
-        /**
-         * Stores if the view is faded to black
-         */
-        protected bool faded_to_black = false;
 
         /**
          * Overlay layout. Holds all drawing layers (like the pdf,
@@ -71,14 +95,11 @@ namespace pdfpc.Window {
         public View.Video video_surface { get; protected set; }
 
         /**
-         * Stores if the view is frozen
-         */
-        protected bool frozen = false;
-
-        /**
          * The GDK scale factor. Used for better slide rendering
          */
-        protected int gdk_scale = 1;
+        public int gdk_scale {
+            get; protected set;
+        }
 
         /**
          * The screen we want this window to be shown
@@ -89,13 +110,31 @@ namespace pdfpc.Window {
          * The monitor number we want to show the window
          */
         protected int monitor_num_to_use;
+        /**
+         * ... and the actual monitor object
+         */
+        public Gdk.Monitor monitor {
+            get; protected set;
+        }
 
-        public Fullscreen(int monitor_num, int width = -1, int height = -1) {
+        protected virtual void resize_gui() {}
+
+        public Fullscreen(PresentationController controller, bool is_presenter,
+            int monitor_num, bool windowed, int width = -1, int height = -1) {
+            this.controller = controller;
+            this.is_presenter = is_presenter;
+            this.windowed = windowed;
+
+            this.title = "pdfpc - %s (%s)".printf(
+                is_presenter ? "presenter" : "presentation",
+                metadata.get_title());
+
+            this.destroy.connect((source) => controller.quit());
+
             var display = Gdk.Display.get_default();
-            Gdk.Monitor monitor;
             if (monitor_num >= 0) {
                 // Start in the given monitor
-                monitor = display.get_monitor(monitor_num);
+                this.monitor = display.get_monitor(monitor_num);
                 this.monitor_num_to_use = monitor_num;
 
                 this.screen_to_use = display.get_default_screen();
@@ -106,23 +145,14 @@ namespace pdfpc.Window {
                 device.get_position(out this.screen_to_use,
                     out pointerx, out pointery);
 
-                monitor = display.get_monitor_at_point(pointerx, pointery);
+                this.monitor = display.get_monitor_at_point(pointerx, pointery);
                 // Shouldn't be used, just a safety precaution
                 this.monitor_num_to_use = 0;
             }
-            this.screen_geometry = monitor.get_geometry();
 
-            this.gdk_scale = this.get_scale_factor();
-            if (Pdfpc.is_Wayland_backend() && Options.wayland_workaround) {
-                // See issue 214. Wayland is doing some double scaling therefore
-                // we are lying about the actual screen size
-                this.screen_geometry.width /= this.gdk_scale;
-                this.screen_geometry.height /= this.gdk_scale;
-            }
+            this.gdk_scale = this.monitor.get_scale_factor();
 
             this.overlay_layout = new Gtk.Overlay();
-            this.overlay_layout.halign = Gtk.Align.CENTER;
-            this.overlay_layout.valign = Gtk.Align.CENTER;
 
             this.pointer_drawing_surface = new Gtk.DrawingArea();
             this.pen_drawing_surface = new Gtk.DrawingArea();
@@ -136,51 +166,51 @@ namespace pdfpc.Window {
                 this.set_widget_event_pass_through(this.video_surface, true);
             });
             this.pen_drawing_surface.realize.connect(() => {
+                this.enable_pen(false);
+                this.pen_drawing_surface.get_window().set_pass_through(true);
                 this.set_widget_event_pass_through(this.pen_drawing_surface,
                     true);
             });
             this.pointer_drawing_surface.realize.connect(() => {
+                this.enable_pointer(false);
+                this.pointer_drawing_surface.get_window().set_pass_through(true);
                 this.set_widget_event_pass_through(this.pointer_drawing_surface,
                     true);
             });
 
-            this.pointer_drawing_surface.halign = Gtk.Align.FILL;
-            this.pointer_drawing_surface.valign = Gtk.Align.FILL;
+            // By default, we go fullscreen
+            var monitor_geometry = this.monitor.get_geometry();
+            this.window_w = monitor_geometry.width;
+            this.window_h = monitor_geometry.height;
+            if (Pdfpc.is_Wayland_backend() && Options.wayland_workaround) {
+                // See issue 214. Wayland is doing some double scaling therefore
+                // we are lying about the actual screen size
+                this.window_w /= this.gdk_scale;
+                this.window_h /= this.gdk_scale;
+            }
 
-            this.pen_drawing_surface.halign = Gtk.Align.FILL;
-            this.pen_drawing_surface.valign = Gtk.Align.FILL;
-
-            this.video_surface.halign = Gtk.Align.FILL;
-            this.video_surface.valign = Gtk.Align.FILL;
-
-            // Make the window resizable to allow the window manager
-            // to correctly fit it to the screen. (Note: allegedly
-            // this presents a problem for some window managers, but
-            // setting resizable to false prevents full-screen from
-            // working)
-            this.resizable = true;
-
-            if (!Options.windowed) {
+            if (!this.windowed) {
                 if (Options.move_on_mapped) {
-                     // Some WM's ignore move requests made prior to
-                     // mapping the window
-                    this.map_event.connect(this.on_mapped);
+                    // Some WM's ignore move requests made prior to
+                    // mapping the window
+                    this.map_event.connect(() => {
+                            this.do_fullscreen();
+                            return true;
+                        });
                 } else {
                     this.do_fullscreen();
                 }
             } else {
                 if (width > 0 && height > 0) {
-                    this.screen_geometry.width = width;
-                    this.screen_geometry.height = height;
+                    this.window_w = width;
+                    this.window_h = height;
                 } else {
-                    this.screen_geometry.width /= 2;
-                    this.screen_geometry.height /= 2;
+                    this.window_w /= 2;
+                    this.window_h /= 2;
                 }
-                this.resizable = false;
             }
 
-            this.set_size_request(this.screen_geometry.width,
-                this.screen_geometry.height);
+            this.set_default_size(this.window_w, this.window_h);
 
             this.add_events(Gdk.EventMask.POINTER_MOTION_MASK);
             this.motion_notify_event.connect(this.on_mouse_move);
@@ -188,28 +218,160 @@ namespace pdfpc.Window {
             // Start the 5 seconds timeout after which the mouse cursor is
             // hidden
             this.restart_hide_cursor_timer();
+
+            // Watch for window geometry changes; keep the local copy updated
+            this.configure_event.connect((ev) => {
+                    if (ev.width != this.window_w ||
+                        ev.height != this.window_h) {
+                        this.window_w = ev.width;
+                        this.window_h = ev.height;
+
+                        // Resize any GUI elements if needed
+                        this.resize_gui();
+                    }
+                    return false;
+                });
+
+            this.pointer_drawing_surface.draw.connect(this.draw_pointer);
+            this.pen_drawing_surface.draw.connect(this.draw_pen);
+
+            this.key_press_event.connect(this.controller.key_press);
+            this.button_press_event.connect(this.controller.button_press);
+            this.scroll_event.connect(this.controller.scroll);
         }
 
         protected void do_fullscreen() {
+            // This should not happen, just in case...
+            if (this.monitor == null) {
+                return;
+            }
             // Wayland has no concept of global coordinates, so move() does not
             // work there. The window is "somewhere", but we do not care,
             // since the next call should fix it. For X11 and KWin/Plasma this
             // does the right thing.
-            this.move(this.screen_geometry.x, this.screen_geometry.y);
+            Gdk.Rectangle monitor_geometry = this.monitor.get_geometry();
+            this.move(monitor_geometry.x, monitor_geometry.y);
 
             // Specially for Wayland; just fullscreen() would do otherwise...
             this.fullscreen_on_monitor(this.screen_to_use,
                 this.monitor_num_to_use);
         }
 
-        protected bool on_mapped(Gdk.EventAny event) {
-            if (event.type != Gdk.EventType.MAP) {
-                return false;
+        public void toggle_windowed() {
+            this.windowed = !this.windowed;
+            if (!this.windowed) {
+                var window = this.get_window();
+                if (window != null) {
+                    this.do_fullscreen();
+                }
+            } else {
+                this.unfullscreen();
+            }
+        }
+
+        public void connect_monitor(Gdk.Monitor? monitor) {
+            // This will likely become beefier in the future
+            this.monitor = monitor;
+        }
+
+        public bool is_monitor_connected() {
+            return this.monitor != null ? true:false;
+        }
+
+        protected bool draw_pointer(Cairo.Context context) {
+            Gtk.Allocation a;
+            this.pointer_drawing_surface.get_allocation(out a);
+            PresentationController c = this.controller;
+
+            // Draw the highlighted area, but ignore very short drags
+            // made unintentionally by mouse clicks
+            if (c.highlight_w > 0.01 && c.highlight_h > 0.01) {
+                context.rectangle(0, 0, a.width, a.height);
+                context.new_sub_path();
+                context.rectangle((int)(c.highlight_x*a.width),
+                                  (int)(c.highlight_y*a.height),
+                                  (int)(c.highlight_w*a.width),
+                                  (int)(c.highlight_h*a.height));
+
+                context.set_fill_rule(Cairo.FillRule.EVEN_ODD);
+                context.set_source_rgba(0,0,0,0.5);
+                context.fill_preserve();
+
+                context.new_path();
+            }
+            // Draw the pointer when not dragging
+            if (c.drag_x == -1 && !c.pointer_hidden) {
+                int x = (int)(a.width*c.pointer_x);
+                int y = (int)(a.height*c.pointer_y);
+                int r = (int)(a.height*0.001*c.pointer_size);
+
+                context.set_source_rgba(c.pointer_color.red,
+                                        c.pointer_color.green,
+                                        c.pointer_color.blue,
+                                        c.pointer_color.alpha);
+                context.arc(x, y, r, 0, 2*Math.PI);
+                context.fill();
             }
 
-            this.do_fullscreen();
+            return true;
+        }
+
+        public void enable_pointer(bool onoff) {
+            if (onoff) {
+                this.pointer_drawing_surface.show();
+            } else {
+                this.pointer_drawing_surface.hide();
+            }
+        }
+
+        protected bool draw_pen(Cairo.Context context) {
+            Gtk.Allocation a;
+            this.pen_drawing_surface.get_allocation(out a);
+            PresentationController c = this.controller;
+
+            if (c.pen_drawing != null) {
+                Cairo.Surface? drawing_surface = c.pen_drawing.render_to_surface();
+                int x = (int)(a.width*c.pen_last_x);
+                int y = (int)(a.height*c.pen_last_y);
+                int base_width = c.pen_drawing.width;
+                int base_height = c.pen_drawing.height;
+                Cairo.Matrix old_xform = context.get_matrix();
+                context.scale(
+                    (double) a.width / base_width,
+                    (double) a.height / base_height
+                );
+                context.set_source_surface(drawing_surface, 0, 0);
+                context.paint();
+                context.set_matrix(old_xform);
+                if (this.is_presenter && c.in_drawing_mode() &&
+                    !c.pointer_hidden) {
+                    double width_adjustment = (double) a.width / base_width;
+                    context.set_operator(Cairo.Operator.OVER);
+                    context.set_line_width(2.0);
+                    context.set_source_rgba(
+                        c.current_pen_drawing_tool.red,
+                        c.current_pen_drawing_tool.green,
+                        c.current_pen_drawing_tool.blue,
+                        1.0
+                    );
+                    double arc_radius = c.current_pen_drawing_tool.width * width_adjustment / 2.0;
+                    if (arc_radius < 1.0) {
+                        arc_radius = 1.0;
+                    }
+                    context.arc(x, y, arc_radius, 0, 2*Math.PI);
+                    context.stroke();
+                }
+            }
 
             return true;
+        }
+
+        public void enable_pen(bool onoff) {
+            if (onoff) {
+                this.pen_drawing_surface.show();
+            } else {
+                this.pen_drawing_surface.hide();
+            }
         }
 
         /**
@@ -272,4 +434,3 @@ namespace pdfpc.Window {
         }
     }
 }
-

@@ -56,6 +56,13 @@ namespace pdfpc.Metadata {
         protected Poppler.Document document;
 
         /**
+         * Renderer to be used for rendering the slides
+         */
+        public Renderer.Pdf renderer {
+            get; protected set;
+        }
+
+        /**
          * Pdf page width
          */
         protected double original_page_width = 0;
@@ -68,7 +75,7 @@ namespace pdfpc.Metadata {
         /**
          * Indicates if pages contains also notes and there position (e. g. when using latex beamer)
          */
-        protected NotesPosition notes_position;
+        protected NotesPosition notes_position = NotesPosition.NONE;
 
         /**
          * Number of pages in the pdf document
@@ -108,12 +115,27 @@ namespace pdfpc.Metadata {
         protected uint duration;
 
         /**
+         * Times the talk should start or end
+         */
+        public string? start_time {
+            get; protected set;
+        }
+        public string? end_time {
+            get; protected set;
+        }
+
+        /**
          * The font size used for notes. -1 if none is
          * specified in pdfpc file.
          */
         private int _font_size = -1;
         public int font_size { get { return _font_size; } set { _font_size = value; } }
 
+        public bool is_ready {
+            get {
+                return (this.document != null);
+            }
+        }
 
         /**
          * A file to read additional notes from
@@ -142,22 +164,15 @@ namespace pdfpc.Metadata {
 
                     switch (section_type) {
                         case "[duration]": {
-                            // if duration was set via command line
-                            // ignore pdfpc file
-                            if (Options.duration == uint.MAX) {
-                                this.duration = int.parse(section_content);
-                            }
+                            set_duration(int.parse(section_content));
                             break;
                         }
                         case "[end_time]": {
-                            // command line first
-                            if (Options.end_time == null) {
-                                Options.end_time = section_content;
-                            }
+                            this.end_time = section_content;
                             break;
                         }
                         case "[end_user_slide]": {
-                            this.end_user_slide = int.parse(section_content);
+                            set_end_user_slide(int.parse(section_content));
                             break;
                         }
                         case "[font_size]": {
@@ -185,10 +200,7 @@ namespace pdfpc.Metadata {
                             break;
                         }
                         case "[notes_position]": {
-                            // command line first
-                            if (Options.notes_position == null) {
-                                this.notes_position = NotesPosition.from_string(section_content);
-                            }
+                            this.notes_position = NotesPosition.from_string(section_content);
                             break;
                         }
                         case "[skip]": {
@@ -197,10 +209,7 @@ namespace pdfpc.Metadata {
                             break;
                         }
                         case "[start_time]": {
-                            // command line first
-                            if (Options.start_time == null) {
-                                Options.start_time = section_content;
-                            }
+                            this.start_time = section_content;
                             break;
                         }
                         default: {
@@ -289,13 +298,23 @@ namespace pdfpc.Metadata {
         }
 
         /**
-         * Called on quit
+         * Deactivate all active mappings
          */
-        public void quit() {
-            this.save_to_disk();
+        private void deactivate_mappings() {
             foreach (var mapping in this.action_mapping) {
                 mapping.deactivate();
             }
+            this.action_mapping.clear();
+        }
+
+        /**
+         * Called on quit
+         */
+        public void quit() {
+            if (this.is_ready) {
+                this.save_to_disk();
+            }
+            this.deactivate_mappings();
         }
 
         /**
@@ -456,16 +475,83 @@ namespace pdfpc.Metadata {
         }
 
         /**
+         * Parse XMP metadata from the document, if exists
+         */
+        private void metadata_from_document() {
+            string meta = this.document.get_metadata();
+
+            if (meta == null) {
+                return;
+            }
+
+            XmlParser parser = new XmlParser();
+            try {
+                var tags = parser.parse(meta);
+                foreach (var entry in tags.entries) {
+                    switch (entry.key) {
+                        case "Duration":
+                            set_duration(int.parse(entry.value));
+                            break;
+                        case "EndUserSlide":
+                            set_end_user_slide(int.parse(entry.value));
+                            break;
+                        case "StartTime":
+                            this.start_time = entry.value;
+                            break;
+                        case "EndTime":
+                            this.end_time = entry.value;
+                            break;
+                        case "NotesPosition":
+                            this.notes_position =
+                                NotesPosition.from_string(entry.value);
+                            break;
+                        default:
+                            GLib.printerr("unknown XMP entry %s\n", entry.key);
+                            break;
+                    }
+                }
+            } catch (Error e) {
+                GLib.printerr("XMP parsing error: %s\n", e.message);
+            }
+        }
+
+        /**
          * Base constructor taking the file url to the pdf file
          */
-        public Pdf(string fname, string? fpcname = null) {
+        public Pdf(string? pdfFilename) {
+            if (pdfFilename != null) {
+                this.load(pdfFilename);
+            }
+            this.renderer = new Renderer.Pdf(this);
+        }
+
+        /**
+         * Actual file loading, initialization, etc
+         */
+        public void load(string pdfFilename) {
+            var fname = pdfFilename;
+            string cwd = GLib.Environment.get_current_dir();
+            if (!GLib.Path.is_absolute(fname)) {
+                fname = GLib.Path.build_filename(cwd, fname);
+            }
+
+            var fpcname = Options.pdfpc_location;
+            if (fpcname != null && !GLib.Path.is_absolute(fpcname)) {
+                fpcname = GLib.Path.build_filename(cwd, fpcname);
+            }
+            if (fpcname != null &&
+                !GLib.FileUtils.test(fpcname, (GLib.FileTest.IS_REGULAR))) {
+                GLib.printerr("Can't find custom pdfpc file at %s\n", fpcname);
+                Process.exit(1);
+            }
+
             this.url = File.new_for_commandline_arg(fname).get_uri();
 
-            this.action_mapping = new Gee.ArrayList<ActionMapping>();
-
-            this.notes_position = NotesPosition.from_string(Options.notes_position);
-
-            this.duration = Options.duration;
+            if (this.action_mapping != null) {
+                this.deactivate_mappings();
+            } else {
+                this.action_mapping = new Gee.ArrayList<ActionMapping>();
+            }
 
             fill_path_info(fname, fpcname);
 
@@ -475,7 +561,36 @@ namespace pdfpc.Metadata {
             if (GLib.FileUtils.test(this.pdfpc_fname, (GLib.FileTest.IS_REGULAR))) {
                 parse_pdfpc_file(out skip_line);
             }
+            this.user_view_indexes = new int [0];
             this.document = this.open_pdf_document(this.pdf_fname);
+
+            // Parse XMP metadata
+            this.metadata_from_document();
+
+            // Command line options have the highest priority
+            if (Options.duration != uint.MAX) {
+                set_duration(Options.duration);
+            }
+
+            if (Options.start_time != null) {
+                this.start_time = Options.start_time;
+            }
+            if (Options.end_time != null) {
+                this.end_time = Options.end_time;
+            }
+            // If end_time is set, reset duration to 0
+            if (this.end_time != null) {
+                this.duration = 0;
+            }
+
+            if (Options.notes_position != null) {
+                this.notes_position =
+                    NotesPosition.from_string(Options.notes_position);
+            }
+            if (this.notes_position != NotesPosition.NONE) {
+                Options.disable_auto_grouping = true;
+                GLib.printerr("Notes position set, auto grouping disabled.\n");
+            }
 
             // Get maximal page dimensions
             this.page_count = this.document.get_n_pages();
@@ -509,7 +624,7 @@ namespace pdfpc.Metadata {
                 }
             }
 
-            if(skips_by_user) {
+            if (skips_by_user) {
                 parse_skip_line(skip_line);
             }
 
@@ -635,13 +750,13 @@ namespace pdfpc.Metadata {
          * The user slide corresponding to a real slide.
          *
          * If number is larger than the number of real slides return the
-         * number of user slides.
+         * last user slide.
          */
         public int real_slide_to_user_slide(int number) {
 
             // is this not a valid page?
             if (number > this.page_count) {
-                return (int)this.get_user_slide_count();
+                return (int)this.get_user_slide_count() - 1;
             }
 
             // is number a real page of the last user page?
@@ -663,6 +778,17 @@ namespace pdfpc.Metadata {
             }
 
             return user_slide;
+        }
+
+        /**
+         * Check whether the given slide is the full user slide (i.e., the
+         * last slide within an overlay)
+         */
+        public bool is_user_slide(int number) {
+            int user_slide = real_slide_to_user_slide(number);
+            int last_slide = user_slide_to_real_slide(user_slide, true);
+
+            return (number == last_slide);
         }
 
         /**
@@ -777,6 +903,17 @@ namespace pdfpc.Metadata {
         }
 
         /**
+         * Return the PDF title
+         */
+        public string get_title() {
+            if (this.document != null) {
+                return this.document.get_title();
+            } else {
+                return "";
+            }
+        }
+
+        /**
          * Return the notes for the presentation
          */
         public slides_notes get_notes() {
@@ -841,10 +978,7 @@ namespace pdfpc.Metadata {
          */
         public unowned Gee.List<ActionMapping> get_action_mapping(int page_num) {
             if (page_num != this.mapping_page_num) {
-                foreach (var mapping in this.action_mapping) {
-                    mapping.deactivate();
-                }
-                this.action_mapping.clear();
+                this.deactivate_mappings();
 
                 GLib.List<Poppler.LinkMapping> link_mappings;
                 link_mappings = this.get_document().get_page(page_num).get_link_mapping();
