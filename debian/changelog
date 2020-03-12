@@ -1,3 +1,9 @@
+pdf-presenter-console (4.3.4-4) UNRELEASED; urgency=medium
+
+  * Wrap long lines in changelog entries: 4.0.6-1.
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Thu, 12 Mar 2020 17:34:03 +0000
+
 pdf-presenter-console (4.3.4-3) unstable; urgency=medium
 
   * Track upstream maintenance patches
@@ -133,7 +139,8 @@ pdf-presenter-console (4.0.6-1) unstable; urgency=medium
   * New upstream release
     - fullscreen margin problems (closes: #854266)
     - solve video resolution vs DPI problem (closes: #854273)
-    - sometimes obay loop and showcontrols=false video playback options (closes: #853097)
+    - sometimes obay loop and showcontrols=false video playback options (closes:
+      #853097)
     - better Wayland support
     - show slide numbers on overview page
     - command line option --page/-P for initial page
