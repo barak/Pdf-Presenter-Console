@@ -4,8 +4,9 @@ pdf-presenter-console (4.4.0-1) unstable; urgency=medium
   * Set upstream metadata fields: Bug-Database, Bug-Submit, Repository,
     Repository-Browse.
   * Update standards version to 4.5.0, no changes needed.
+  * Debhelper 13
 
- -- Barak A. Pearlmutter <bap@debian.org>  Thu, 12 Mar 2020 17:47:43 +0000
+ -- Barak A. Pearlmutter <bap@debian.org>  Fri, 29 May 2020 12:21:21 +0100
 
 pdf-presenter-console (4.3.4-3) unstable; urgency=medium
 
