@@ -1,7 +1,6 @@
-version=3
+version=4
 
 # group upstream maintainers, repo tags
-opts="filenamemangle=s/(?:.*)?v?(\d[\d\.]*)\.tar\.gz/<project>-$1.tar.gz/" \
- https://github.com/pdfpc/pdfpc/tags (?:.*/)?v?(\d[\d\.\_]*)\.tar\.gz
+https://github.com/pdfpc/pdfpc/tags (?:.*/)?v?@ANY_VERSION@@ARCHIVE_EXT@
 
 # See competition at http://michaeldadams.org/projects/haskell-pdf-presenter
