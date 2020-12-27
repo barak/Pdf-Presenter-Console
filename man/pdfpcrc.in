@@ -102,6 +102,9 @@ it is supported by the hardware (bool, Default is false).
 .BI disable-scrolling
 Disable scrolling events on the presenter window (bool, Default is false).
 .TP
+.BI disable-tooltips
+Disable tooltips for the toolbox (bool, Default is false).
+.TP
 .BI enable-auto-srt-load
 Try loading video subtitle files automatically. For each video media, pdfpc will
 append ".srt" to the media URI and attempt to load a subtitle file (in the SRT
@@ -148,6 +151,13 @@ Screen to be used for the presentation (output name, see e.g. "xrandr --listmoni
 .B presenter-screen
 Screen to be used for the presenter (output name).
 .TP
+.B spotlight-opacity
+Set opacity of the area outside of the spotlight, in percent (int, default is
+50).
+.TP
+.B spotlight-size
+Set the initial spotlight size, in pixels (int, default is 100).
+.TP
 .B switch-screens
 Switch the presentation and the presenter screen (bool, Default is false).
 .TP
@@ -169,6 +179,10 @@ right-to-left, top-to-bottom, or botton-to-top, respectively (Default is LtoR).
 .TP
 .B toolbox-minimized
 Set the initial toolbox state minimized (bool, Default is false).
+.TP
+.B transition-fps
+Frames-per-second for slide transitions (int, Default is 25). Set to 0 to
+disable all transitions.
 .TP
 .B windowed-mode
 Set the initial windowed mode: none, presenter, presentation, or both (Default

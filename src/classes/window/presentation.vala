@@ -12,7 +12,7 @@
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -53,9 +53,11 @@ namespace pdfpc.Window {
 
             this.controller.reload_request.connect(this.on_reload);
             this.controller.update_request.connect(this.update);
+            this.controller.zoom_request.connect(this.on_zoom);
 
-            this.view = new View.Pdf.from_fullscreen(this,
-                Metadata.Area.CONTENT, true);
+            this.view = new View.Pdf.from_fullscreen(this, false, true);
+            this.view.transitions_enabled = true;
+            this.view.entering_slide.connect(this.on_entering_slide);
 
             this.overlay_layout.add(this.view);
 
@@ -93,6 +95,15 @@ namespace pdfpc.Window {
 
             bool force = old_disabled != this.view.disabled;
             this.view.display(this.controller.current_slide_number, force);
+        }
+
+        private void on_zoom(PresentationController.ScaledRectangle? rect) {
+            this.main_view.display(this.controller.current_slide_number,
+                true, rect);
+        }
+
+        private void on_entering_slide(int slide_number) {
+            this.controller.start_autoadvance_timer(slide_number);
         }
     }
 }

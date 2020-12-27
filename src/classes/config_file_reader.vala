@@ -11,7 +11,7 @@
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -254,11 +254,17 @@ namespace pdfpc {
                 case "disable-scrolling":
                     Options.disable_scrolling = bool.parse(fields[2]);
                     break;
+                case "disable-tooltips":
+                    Options.disable_tooltips = bool.parse(fields[2]);
+                    break;
                 case "enable-auto-srt-load":
                     Options.auto_srt = bool.parse(fields[2]);
                     break;
                 case "final-slide":
                     Options.final_slide_overlay = bool.parse(fields[2]);
+                    break;
+                case "maximize-in-drawing":
+                    Options.maximize_in_drawing = bool.parse(fields[2]);
                     break;
                 case "move-on-mapped":
                     Options.move_on_mapped = bool.parse(fields[2]);
@@ -290,6 +296,12 @@ namespace pdfpc {
                 case "presenter-screen":
                     Options.presenter_screen = fields[2];
                     break;
+                case "spotlight-opacity":
+                    Options.spotlight_opacity = int.parse(fields[2]);
+                    break;
+                case "spotlight-size":
+                    Options.spotlight_size = int.parse(fields[2]);
+                    break;
                 case "switch-screens":
                     bool switch_screens = bool.parse(fields[2]);
                     if (switch_screens) {
@@ -317,6 +329,9 @@ namespace pdfpc {
                     break;
                 case "toolbox-minimized":
                     Options.toolbox_minimized = bool.parse(fields[2]);
+                    break;
+                case "transition-fps":
+                    Options.transition_fps = int.parse(fields[2]);
                     break;
                 case "windowed-mode":
                     // don't override command-line setting

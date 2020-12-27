@@ -10,7 +10,7 @@
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -363,7 +363,7 @@ namespace pdfpc.Window {
                 var real_slide_id =
                     metadata.user_slide_to_real_slide(this.slide_id, true);
                 slide_to_fill = renderer.render(real_slide_id,
-                    Metadata.Area.CONTENT, slide_width, slide_height,
+                    false, slide_width, slide_height,
                     true, true);
             } catch (Renderer.RenderError e) {
                 ;

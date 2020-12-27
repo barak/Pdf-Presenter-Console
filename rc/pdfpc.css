@@ -16,6 +16,11 @@ entry, iconview, textview *, window {
     color: white;
 }
 
+textview * selection {
+  background-color: white;
+  color: black;
+}
+
 entry {
     background-image: none;
 }
@@ -23,6 +28,10 @@ entry {
 paned separator {
     background-image: none;
     background-color: black;
+}
+
+.customization separator {
+    background-color: steelblue;
 }
 
 .toolbox button:not(.color) * {

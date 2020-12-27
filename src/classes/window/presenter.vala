@@ -15,7 +15,7 @@
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -48,7 +48,7 @@ namespace pdfpc.Window {
         /**
          * View showing the current slide
          */
-        public View.Pdf current_view;
+        protected View.Pdf current_view;
 
         /**
          * View showing a preview of the next slide
@@ -60,6 +60,19 @@ namespace pdfpc.Window {
          */
         protected View.Pdf strict_next_view;
         protected View.Pdf strict_prev_view;
+
+        /**
+         * A stack of text box (for editing) and rendered view of notes
+         * for the current slide
+         */
+        protected Gtk.Stack notes_stack;
+        protected Gtk.TextView notes_editor;
+        protected View.Pdf notes_view;
+        protected View.MarkdownView mdview;
+
+        protected Gtk.Paned slide_views;
+        protected Gtk.Paned current_view_and_stricts;
+        protected Gtk.Paned next_view_and_notes;
 
         /**
          * Timer for the presenation
@@ -117,11 +130,6 @@ namespace pdfpc.Window {
         protected Gtk.Image locked_icon;
 
         /**
-         * Text box for displaying notes for the slides
-         */
-        protected Gtk.TextView notes_view;
-
-        /**
          * CSS provider for setting note font size
          */
         protected Gtk.CssProvider css_provider;
@@ -145,6 +153,11 @@ namespace pdfpc.Window {
          * Indication that the eraser tool is selected
          */
         protected Gtk.Image eraser_icon;
+
+        /**
+         * Indication that the spotlight tool is selected
+         */
+        protected Gtk.Image spotlight_icon;
 
         /**
          * The overview of slides
@@ -215,11 +228,16 @@ namespace pdfpc.Window {
         }
 
         protected Gtk.Button add_toolbox_button(Gtk.Box panel,
-            bool tbox_inverse, string icon_fname) {
+            bool tbox_inverse, string icon_fname, string? tooltip = null) {
             var bimage = this.load_icon(icon_fname, toolbox_icon_height);
             bimage.show();
             var button = new Gtk.Button();
             button.add(bimage);
+            button.can_focus = false;
+            button.add_events(Gdk.EventMask.POINTER_MOTION_MASK);
+            if (!Options.disable_tooltips) {
+                button.set_tooltip_text(tooltip);
+            }
             if (tbox_inverse) {
                 panel.pack_end(button);
             } else {
@@ -230,8 +248,13 @@ namespace pdfpc.Window {
         }
 
         protected Gtk.ColorButton add_toolbox_cbutton(Gtk.Box panel,
-            bool tbox_inverse) {
+            bool tbox_inverse, string? tooltip = null) {
             var button = new Gtk.ColorButton();
+            button.can_focus = false;
+            button.add_events(Gdk.EventMask.POINTER_MOTION_MASK);
+            if (!Options.disable_tooltips) {
+                button.set_tooltip_text(tooltip);
+            }
             if (tbox_inverse) {
                 panel.pack_end(button);
             } else {
@@ -242,7 +265,7 @@ namespace pdfpc.Window {
         }
 
         protected Gtk.ScaleButton add_toolbox_sbutton(Gtk.Box panel,
-            bool tbox_inverse, string icon_fname) {
+            bool tbox_inverse, string icon_fname, string? tooltip = null) {
 
             var button = new Gtk.ScaleButton(Gtk.IconSize.DIALOG,
                 0, 50, 2, null);
@@ -253,6 +276,11 @@ namespace pdfpc.Window {
 
             button.set_relief(Gtk.ReliefStyle.NORMAL);
             button.get_adjustment().set_page_increment(4);
+
+            button.add_events(Gdk.EventMask.POINTER_MOTION_MASK);
+            if (!Options.disable_tooltips) {
+                button.set_tooltip_text(tooltip);
+            }
 
             if (tbox_inverse) {
                 panel.pack_end(button);
@@ -311,14 +339,88 @@ namespace pdfpc.Window {
             return help_sw;
         }
 
-        private void disable_paned_handle(Gtk.Paned paned) {
+        private void enable_paned_handle(Gtk.Paned paned, bool onoff) {
+            var handle = paned.get_handle_window();
+            if (handle != null) {
+                Gdk.EventMask emask;
+                Gdk.Cursor cursor;
+                Gtk.StyleContext context = this.get_style_context();
+                if (onoff) {
+                    cursor = handle.get_data<Gdk.Cursor>("cursor");
+                    emask  = handle.get_data<Gdk.EventMask>("emask");
+                    context.add_class("customization");
+                } else {
+                    cursor = null;
+                    emask = 0;
+                    context.remove_class("customization");
+                }
+                handle.set_cursor(cursor);
+                handle.set_events(emask);
+            }
+        }
+
+        /**
+         * A wrapper for the Gtk.Paned constructor providing the
+         * enable/disable functionality which is missing in Gtk
+         */
+        protected Gtk.Paned create_paned(Gtk.Orientation orientation)
+        {
+            var paned = new Gtk.Paned(orientation);
+            paned.wide_handle = true;
             paned.map.connect(() => {
                     var handle = paned.get_handle_window();
-                    if (handle != null) {
-                        handle.set_cursor(null);
-                        handle.set_events(0);
+                    if (handle != null &&
+                        !handle.get_data<bool>("initialized")) {
+                        // save default cursor and event mask of the handle
+                        handle.set_data<Gdk.Cursor>("cursor",
+                            handle.get_cursor());
+                        handle.set_data<Gdk.EventMask>("emask",
+                            handle.get_events());
+                        handle.set_data<bool>("initialized", true);
+
+                        // start in the disabled state
+                        this.enable_paned_handle(paned, false);
                     }
                 });
+
+            return paned;
+        }
+
+        public void set_customizable(bool onoff) {
+            enable_paned_handle(this.slide_views, onoff);
+            enable_paned_handle(this.current_view_and_stricts, onoff);
+            enable_paned_handle(this.next_view_and_notes, onoff);
+        }
+
+        public bool current_view_maximized {
+            get; protected set; default = false;
+        }
+
+        public void maximize_current_view(bool onoff) {
+            if (this.current_view_maximized == onoff) {
+                // nothing to do
+                return;
+            }
+
+            int width, height;
+            if (onoff) {
+                width  = this.window_w;
+                height = this.current_view_and_stricts.get_allocated_height();
+                // save the current positions
+                this.slide_views.set_data<int>("position",
+                    this.slide_views.position);
+                this.current_view_and_stricts.set_data<int>("position",
+                    this.current_view_and_stricts.position);
+            } else {
+                // get the saved positions
+                width  = this.slide_views.get_data<int>("position");
+                height = this.current_view_and_stricts.get_data<int>("position");
+            }
+
+            this.slide_views.position = width;
+            this.current_view_and_stricts.position = height;
+
+            this.current_view_maximized = onoff;
         }
 
         /**
@@ -346,6 +448,7 @@ namespace pdfpc.Window {
             this.highlight_icon = this.load_icon("highlight.svg", icon_height);
             this.pen_icon = this.load_icon("pen.svg", icon_height);
             this.eraser_icon = this.load_icon("eraser.svg", icon_height);
+            this.spotlight_icon = this.load_icon("spotlight.svg", icon_height);
 
             this.status.pack_start(this.blank_icon, false, false);
             this.status.pack_start(this.hidden_icon, false, false);
@@ -357,6 +460,7 @@ namespace pdfpc.Window {
             this.status.pack_start(this.highlight_icon, false, false);
             this.status.pack_start(this.pen_icon, false, false);
             this.status.pack_start(this.eraser_icon, false, false);
+            this.status.pack_start(this.spotlight_icon, false, false);
         }
 
         /**
@@ -397,6 +501,11 @@ namespace pdfpc.Window {
                 this.pen_icon.show();
             } else {
                 this.pen_icon.hide();
+            }
+            if (this.controller.is_spotlight_active()) {
+                this.spotlight_icon.show();
+            } else {
+                this.spotlight_icon.hide();
             }
         }
 
@@ -450,6 +559,7 @@ namespace pdfpc.Window {
             this.controller.hide_overview_request.connect(this.hide_overview);
             this.controller.increase_font_size_request.connect(this.increase_font_size);
             this.controller.decrease_font_size_request.connect(this.decrease_font_size);
+            this.controller.zoom_request.connect(this.on_zoom);
 
             // TODO: update the page aspect ratio on document reload
             float page_ratio = (float)
@@ -463,42 +573,56 @@ namespace pdfpc.Window {
             int current_allocated_width = (int) Math.floor(
                 this.window_w*Options.current_size/100.0);
             this.current_view = new View.Pdf.from_fullscreen(this,
-                Metadata.Area.NOTES, true);
+                false, true);
 
             this.next_view = new View.Pdf.from_fullscreen(this,
-                Metadata.Area.CONTENT, false, true);
+                false, false, true);
 
             this.strict_next_view = new View.Pdf.from_fullscreen(this,
-                Metadata.Area.CONTENT, false);
+                false, false);
             this.strict_prev_view = new View.Pdf.from_fullscreen(this,
-                Metadata.Area.CONTENT, false);
+                false, false);
 
             this.css_provider = new Gtk.CssProvider();
             Gtk.StyleContext.add_provider_for_screen(this.screen_to_use,
-                css_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER);
-
-            // TextView for notes in the slides
-            this.notes_view = new Gtk.TextView();
-            this.notes_view.name = "notesView";
-            this.notes_view.editable = false;
-            this.notes_view.cursor_visible = false;
-            this.notes_view.wrap_mode = Gtk.WrapMode.WORD;
-            this.notes_view.buffer.text = "";
-            this.notes_view.key_press_event.connect(this.on_key_press_notes_view);
-            if (this.metadata.font_size >= 0) {
-                // LEGACY font size detection
-                // Before, we had the font size in absolute (device) units.
-                // These were typically larger than 1000
-                if (this.metadata.font_size >= 1000) {
-                    this.metadata.font_size /= Pango.SCALE;
-                }
-                this.set_font_size(this.metadata.font_size);
-            }
+                this.css_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER);
 
             this.bottom_text_css_provider = new Gtk.CssProvider();
             Gtk.StyleContext.add_provider_for_screen(this.screen_to_use,
                 this.bottom_text_css_provider,
                 Gtk.STYLE_PROVIDER_PRIORITY_FALLBACK);
+
+            Gtk.AspectFrame frame;
+
+            // TextView for notes in the slides
+            this.notes_editor = new Gtk.TextView();
+            this.notes_editor.name = "notesView";
+            this.notes_editor.editable = false;
+            this.notes_editor.cursor_visible = false;
+            this.notes_editor.wrap_mode = Gtk.WrapMode.WORD;
+            this.notes_editor.buffer.text = "";
+            this.notes_editor.key_press_event.connect(this.on_key_press_notes_editor);
+            var notes_sw = new Gtk.ScrolledWindow(null, null);
+            notes_sw.add(this.notes_editor);
+            notes_sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC);
+
+            this.notes_view = new View.Pdf.from_fullscreen(this,
+                true, false);
+            frame = new Gtk.AspectFrame(null, 0.5f, 0.0f, page_ratio, false);
+            frame.add(this.notes_view);
+
+            // The Markdown rendering widget
+            this.mdview = new View.MarkdownView();
+
+            // The full notes stack
+            this.notes_stack = new Gtk.Stack();
+            this.notes_stack.add_named(notes_sw, "editor");
+            this.notes_stack.add_named(frame, "view");
+            this.notes_stack.add_named(this.mdview, "mdview");
+            this.notes_stack.homogeneous = true;
+
+            var meta_font_size = this.metadata.get_font_size();
+            this.apply_font_size(meta_font_size);
 
             // The countdown timer is centered in the 90% bottom part of the screen
             this.timer = this.controller.getTimer();
@@ -535,12 +659,8 @@ namespace pdfpc.Window {
             this.overview.set_n_slides(this.controller.user_n_slides);
             this.controller.set_overview(this.overview);
 
-            Gtk.AspectFrame frame;
-
-            var slide_views = new Gtk.Paned(Gtk.Orientation.HORIZONTAL);
-            slide_views.position = current_allocated_width;
-            slide_views.wide_handle = true;
-            disable_paned_handle(slide_views);
+            this.slide_views = create_paned(Gtk.Orientation.HORIZONTAL);
+            this.slide_views.position = current_allocated_width;
 
             var strict_views = new Gtk.Grid();
             strict_views.column_homogeneous = true;
@@ -555,10 +675,13 @@ namespace pdfpc.Window {
 
             this.overlay_layout.add(this.current_view);
 
-            this.video_surface.set_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK | Gdk.EventMask.POINTER_MOTION_MASK);
+            this.video_surface.set_events(Gdk.EventMask.BUTTON_PRESS_MASK   |
+                                          Gdk.EventMask.BUTTON_RELEASE_MASK |
+                                          Gdk.EventMask.POINTER_MOTION_MASK);
 
 
-            var current_view_and_stricts = new Gtk.Paned(Gtk.Orientation.VERTICAL);
+            this.current_view_and_stricts =
+                create_paned(Gtk.Orientation.VERTICAL);
 
             // Height of the window minus the bottom part (icons, timer, etc)
             var usable_height = (1.0 - 1.0/this.bottom_frac_inv)*this.window_h;
@@ -566,44 +689,37 @@ namespace pdfpc.Window {
             double wheight1, wheight2;
             wheight1 = Options.current_height/100.0*usable_height;
             wheight2 = current_allocated_width/page_ratio;
-            current_view_and_stricts.position = (int) double.min(wheight1, wheight2);
-
-            current_view_and_stricts.wide_handle = true;
-            disable_paned_handle(current_view_and_stricts);
+            this.current_view_and_stricts.position =
+                (int) double.min(wheight1, wheight2);
 
             frame = new Gtk.AspectFrame(null, 0.5f, 0.0f, page_ratio, false);
             frame.add(overlay_layout);
-            current_view_and_stricts.pack1(frame, true, true);
-            current_view_and_stricts.pack2(strict_views, true, true);
+            this.current_view_and_stricts.pack1(frame, true, true);
+            this.current_view_and_stricts.pack2(strict_views, true, true);
 
-            slide_views.pack1(current_view_and_stricts, true, true);
+            this.slide_views.pack1(this.current_view_and_stricts, true, true);
 
-            var next_view_and_notes = new Gtk.Paned(Gtk.Orientation.VERTICAL);
+            this.next_view_and_notes = create_paned(Gtk.Orientation.VERTICAL);
 
             // To be exact, the width of Paned handle should be subtracted...
             var next_allocated_width = this.window_w - current_allocated_width;
 
             wheight1 = Options.next_height/100.0*usable_height;
             wheight2 = next_allocated_width/page_ratio;
-            next_view_and_notes.position = (int) double.min(wheight1, wheight2);
-
-            next_view_and_notes.wide_handle = true;
-            disable_paned_handle(next_view_and_notes);
+            this.next_view_and_notes.position =
+                (int) double.min(wheight1, wheight2);
 
             frame = new Gtk.AspectFrame(null, 0.5f, 0.0f, page_ratio, false);
             frame.add(next_view);
-            next_view_and_notes.pack1(frame, true, true);
+            this.next_view_and_notes.pack1(frame, true, true);
 
-            var notes_sw = new Gtk.ScrolledWindow(null, null);
-            notes_sw.add(this.notes_view);
-            notes_sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC);
-            next_view_and_notes.pack2(notes_sw, true, true);
-            slide_views.pack2(next_view_and_notes, true, true);
+            this.next_view_and_notes.pack2(this.notes_stack, true, true);
+            this.slide_views.pack2(this.next_view_and_notes, true, true);
 
             var help_sw = create_help_window();
 
             this.slide_stack = new Gtk.Stack();
-            this.slide_stack.add_named(slide_views, "slides");
+            this.slide_stack.add_named(this.slide_views, "slides");
             this.slide_stack.add_named(this.overview, "overview");
             this.slide_stack.add_named(help_sw, "help");
             this.slide_stack.homogeneous = true;
@@ -624,7 +740,7 @@ namespace pdfpc.Window {
             full_layout.attach(bottom_row, 0, this.bottom_frac_inv - 1, 1, 1);
 
             Gtk.Overlay full_overlay = new Gtk.Overlay();
-            full_overlay.add_overlay(full_layout);
+            full_overlay.add(full_layout);
 
             // maybe should be calculated based on screen dimensions?
             this.toolbox_icon_height = 36;
@@ -665,8 +781,6 @@ namespace pdfpc.Window {
             toolbox.halign = Gtk.Align.START;
             toolbox.valign = Gtk.Align.START;
 
-            toolbox.set_child_visible(Options.toolbox_shown);
-
             /* Toolbox handle consisting of an image + eventbox */
             var himage = this.load_icon("move.svg", 30);
             himage.show();
@@ -686,7 +800,8 @@ namespace pdfpc.Window {
             }
 
             Gtk.Button tb;
-            tb = add_toolbox_button(this.toolbox, tbox_inverse, "settings.svg");
+            tb = add_toolbox_button(this.toolbox, tbox_inverse, "settings.svg",
+                "Toggle toolbox panel");
 
             /* Toolbox panel that contains the buttons */
             var button_panel = new Gtk.Box(toolbox_orientation, 0);
@@ -694,7 +809,7 @@ namespace pdfpc.Window {
             button_panel.set_homogeneous(true);
 
             if (Options.toolbox_minimized) {
-                button_panel.set_child_visible(false);
+                button_panel.hide();
             }
             if (tbox_inverse) {
                 this.toolbox.pack_end(button_panel);
@@ -703,52 +818,70 @@ namespace pdfpc.Window {
             }
 
             tb.clicked.connect(() => {
-                    var state = button_panel.get_child_visible();
-                    button_panel.set_child_visible(!state);
+                    var state = button_panel.visible;
+                    if (state) {
+                        button_panel.hide();
+                    } else {
+                        button_panel.show();
+                    }
                 });
 
-            tb = add_toolbox_button(button_panel, tbox_inverse, "empty.svg");
+            tb = add_toolbox_button(button_panel, tbox_inverse, "empty.svg",
+                "Normal mode");
             tb.clicked.connect(() => {
                     this.controller.set_normal_mode();
                 });
-            tb = add_toolbox_button(button_panel, tbox_inverse, "highlight.svg");
+            tb = add_toolbox_button(button_panel, tbox_inverse, "highlight.svg",
+                "Pointer mode");
             tb.clicked.connect(() => {
                     this.controller.set_pointer_mode();
                 });
-            tb = add_toolbox_button(button_panel, tbox_inverse, "pen.svg");
+            tb = add_toolbox_button(button_panel, tbox_inverse, "pen.svg",
+                "Pen mode");
             tb.clicked.connect(() => {
                     this.controller.set_pen_mode();
                 });
-            tb = add_toolbox_button(button_panel, tbox_inverse, "eraser.svg");
+            tb = add_toolbox_button(button_panel, tbox_inverse, "eraser.svg",
+                "Eraser mode");
             tb.clicked.connect(() => {
                     this.controller.set_eraser_mode();
                 });
-            tb = add_toolbox_button(button_panel, tbox_inverse, "snow.svg");
+            tb = add_toolbox_button(button_panel, tbox_inverse, "spotlight.svg",
+                "Spotlight mode");
+            tb.clicked.connect(() => {
+                    this.controller.set_spotlight_mode();
+                });
+            tb = add_toolbox_button(button_panel, tbox_inverse, "snow.svg",
+                "Freeze presentation window");
             tb.clicked.connect(() => {
                     this.controller.toggle_freeze();
                 });
-            tb = add_toolbox_button(button_panel, tbox_inverse, "blank.svg");
+            tb = add_toolbox_button(button_panel, tbox_inverse, "blank.svg",
+                "Black presentation window");
             tb.clicked.connect(() => {
                     this.controller.fade_to_black();
                 });
-            tb = add_toolbox_button(button_panel, tbox_inverse, "hidden.svg");
+            tb = add_toolbox_button(button_panel, tbox_inverse, "hidden.svg",
+                "Hide presentation window");
             tb.clicked.connect(() => {
                     this.controller.hide_presentation();
                 });
-            tb = add_toolbox_button(button_panel, tbox_inverse, "pause.svg");
+            tb = add_toolbox_button(button_panel, tbox_inverse, "pause.svg",
+                "Pause/resume timer");
             tb.clicked.connect(() => {
                     this.controller.toggle_pause();
                 });
 
             scale_button = add_toolbox_sbutton(button_panel, tbox_inverse,
-                "linewidth.svg");
-            scale_button.set_child_visible(false);
+                "linewidth.svg", "Drawing tool size");
+            scale_button.hide();
             scale_button.value_changed.connect((val) => {
                 this.controller.set_pen_size(val);
             });
 
-            color_button = add_toolbox_cbutton(button_panel, tbox_inverse);
-            color_button.set_child_visible(false);
+            color_button = add_toolbox_cbutton(button_panel, tbox_inverse,
+                "Pen color");
+            color_button.hide();
             color_button.color_set.connect(() => {
                     var rgba = color_button.rgba;
                     this.controller.pen_drawing.pen.set_rgba(rgba);
@@ -756,6 +889,7 @@ namespace pdfpc.Window {
                 });
 
             this.toolbox_container = new Gtk.Fixed();
+
             this.toolbox_container.put(toolbox, tbox_x, tbox_y);
 
             full_overlay.add_overlay(this.toolbox_container);
@@ -845,22 +979,33 @@ namespace pdfpc.Window {
         }
 
         public void custom_slide_count(int current) {
-            int total = this.metadata.get_end_user_slide();
+            int total = this.metadata.get_end_user_slide() + 1;
             this.slide_progress.set_text("%d/%u".printf(current, total));
         }
 
         protected void update_toolbox() {
-            toolbox.set_child_visible(Options.toolbox_shown);
+            if (Options.toolbox_shown) {
+                toolbox_container.show();
+            } else {
+                toolbox_container.hide();
+            }
 
             var controller = this.controller;
 
             var rgba = controller.pen_drawing.pen.get_rgba();
             color_button.set_rgba(rgba);
-            color_button.set_child_visible(controller.is_pen_active());
+            if (controller.is_pen_active()) {
+                color_button.show();
+            } else {
+                color_button.hide();
+            }
 
             scale_button.set_value(controller.get_pen_size());
-            scale_button.set_child_visible(controller.is_pen_active() ||
-                controller.is_eraser_active());
+            if (controller.is_pen_active() || controller.is_eraser_active()) {
+                scale_button.show();
+            } else {
+                scale_button.hide();
+            }
         }
 
         /**
@@ -872,41 +1017,51 @@ namespace pdfpc.Window {
             this.next_view.invalidate();
             this.strict_next_view.invalidate();
             this.strict_prev_view.invalidate();
+            this.notes_view.invalidate();
             this.overview.set_n_slides(this.controller.user_n_slides);
         }
 
         public void update() {
-            if (!metadata.is_ready) {
+            if (!this.metadata.is_ready) {
                 return;
             }
+
             int current_slide_number = this.controller.current_slide_number;
-            int current_user_slide_number = this.controller.current_user_slide_number;
+            int current_user_slide_number =
+                this.controller.current_user_slide_number;
 
             this.current_view.display(current_slide_number);
-            int next_view_slide_offset = 0;
-            if (   !Options.final_slide_overlay
-                || (Options.final_slide_overlay && current_slide_number == this.metadata.user_slide_to_real_slide(current_user_slide_number))
-               ){
-                next_view_slide_offset = 1;
+
+            var next_view_user_slide = current_user_slide_number;
+            if (!Options.final_slide_overlay ||
+                this.metadata.is_user_slide(current_slide_number)) {
+                next_view_user_slide++;
             }
-            this.next_view.display(
-                this.metadata.user_slide_to_real_slide(current_user_slide_number + next_view_slide_offset)
-            );
-            if (this.controller.skip_next()) {
-                this.strict_next_view.disabled = false;
+
+            var next_slide_number =
+                this.metadata.user_slide_to_real_slide(next_view_user_slide);
+            this.next_view.disabled = (next_slide_number < 0);
+            this.next_view.display(next_slide_number);
+
+            next_slide_number =
+                this.metadata.next_in_overlay(current_slide_number);
+            this.strict_next_view.disabled = (next_slide_number < 0);
+            this.strict_next_view.display(next_slide_number);
+
+            var prev_slide_number =
+                this.metadata.prev_in_overlay(current_slide_number);
+            this.strict_prev_view.disabled = (prev_slide_number < 0);
+            this.strict_prev_view.display(prev_slide_number);
+
+            if (this.metadata.has_beamer_notes) {
+                this.notes_stack.set_visible_child_name("view");
+                this.notes_view.display(current_slide_number);
             } else {
-                this.strict_next_view.disabled = true;
+                this.notes_stack.set_visible_child_name("mdview");
+                this.update_note();
             }
-            this.strict_next_view.display(current_slide_number + 1);
-            if (this.controller.skip_previous()) {
-                this.strict_prev_view.disabled = false;
-            } else {
-                this.strict_prev_view.disabled = true;
-            }
-            this.strict_prev_view.display(current_slide_number - 1);
 
             this.update_slide_count();
-            this.update_note();
 
             this.update_status_icons();
 
@@ -972,7 +1127,7 @@ namespace pdfpc.Window {
         }
 
         /**
-         * Edit a note. Basically give focus to notes_view
+         * Edit a note. Basically give focus to notes_editor
          */
         public void edit_note() {
             // Ignore events coming from the presentation view
@@ -982,27 +1137,33 @@ namespace pdfpc.Window {
 
             // Disallow editing notes imported from PDF annotations
             int number = this.controller.current_user_slide_number;
-            if (this.metadata.get_notes().is_note_read_only(number)) {
+            if (this.metadata.is_note_read_only(number) ||
+                this.metadata.has_beamer_notes) {
                 blink_lock_icon();
                 return;
             }
 
-            this.notes_view.editable = true;
-            this.notes_view.cursor_visible = true;
-            this.notes_view.grab_focus();
+            this.notes_stack.set_visible_child_name("editor");
+            this.notes_editor.editable = true;
+            this.notes_editor.cursor_visible = true;
+            this.notes_editor.grab_focus();
             this.controller.set_ignore_input_events(true);
         }
 
         /**
          * Handle key presses when editing a note
          */
-        protected bool on_key_press_notes_view(Gtk.Widget source, Gdk.EventKey key) {
+        protected bool on_key_press_notes_editor(Gtk.Widget source, Gdk.EventKey key) {
             if (key.keyval == Gdk.Key.Escape) { /* Escape */
-                this.notes_view.editable = false;
-                this.notes_view.cursor_visible = false;
-                this.metadata.get_notes().set_note(this.notes_view.buffer.text,
-                    this.controller.current_user_slide_number);
+                var this_note = this.notes_editor.buffer.text;
+                this.notes_editor.editable = false;
+                this.notes_editor.cursor_visible = false;
+                this.metadata.set_note(this_note,
+                    this.controller.current_slide_number);
                 this.controller.set_ignore_input_events(false);
+                this.mdview.render(this_note,
+                    this.metadata.get_disable_markdown());
+                this.notes_stack.set_visible_child_name("mdview");
                 return true;
             } else {
                 return false;
@@ -1013,9 +1174,12 @@ namespace pdfpc.Window {
          * Update the text of the current note
          */
         protected void update_note() {
-            string this_note = this.metadata.get_notes().get_note_for_slide(
-                this.controller.current_user_slide_number);
-            this.notes_view.buffer.text = this_note;
+            string this_note = this.metadata.get_note(
+                this.controller.current_slide_number);
+            this.notes_editor.buffer.text = this_note;
+
+            // render the note
+            this.mdview.render(this_note, this.metadata.get_disable_markdown());
         }
 
         public void show_overview() {
@@ -1041,34 +1205,26 @@ namespace pdfpc.Window {
          * Increase font sizes for Widgets
          */
         public void increase_font_size() {
-            int font_size = get_font_size();
+            int font_size = this.metadata.get_font_size();
             font_size += 2;
-            this.metadata.font_size = font_size;
-            set_font_size(font_size);
+            this.metadata.set_font_size(font_size);
+            this.apply_font_size(font_size);
         }
 
         /**
          * Decrease font sizes for Widgets
          */
         public void decrease_font_size() {
-            int font_size = get_font_size();
+            int font_size = this.metadata.get_font_size();
             font_size -= 2;
             if (font_size < 2) {
                 font_size = 2;
             }
-            this.metadata.font_size = font_size;
-            set_font_size(font_size);
+            this.metadata.set_font_size(font_size);
+            this.apply_font_size(font_size);
         }
 
-        private int get_font_size() {
-            Gtk.StyleContext style_context = this.notes_view.get_style_context();
-            Pango.FontDescription font_desc;
-            style_context.get(style_context.get_state(), "font", out font_desc, null);
-
-            return font_desc.get_size()/Pango.SCALE;
-        }
-
-        private void set_font_size(int size) {
+        private void apply_font_size(int size) {
             const string text_css_template = "#notesView { font-size: %dpt; }";
             var css = text_css_template.printf(size);
 
@@ -1077,6 +1233,15 @@ namespace pdfpc.Window {
             } catch (Error e) {
                 GLib.printerr("Warning: failed to set CSS for notes.\n");
             }
+
+            // 20pt is set in notes.css
+            var mdview_zoom = size/20.0;
+            this.mdview.apply_zoom(mdview_zoom);
+        }
+
+        private void on_zoom(PresentationController.ScaledRectangle? rect) {
+            this.main_view.display(this.controller.current_slide_number,
+                true, rect);
         }
 
         public void show_help_window(bool onoff) {

@@ -13,7 +13,7 @@
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -44,7 +44,7 @@ namespace pdfpc {
     TimerLabel getTimerLabel(PresentationController controller, int duration,
         string? start_time_str, string? end_time_str) {
 
-        uint last_minutes = Options.last_minutes;
+        uint last_minutes = controller.metadata.get_last_minutes();
 
         // Calculate the countdown to display until the presentation has to
         // start

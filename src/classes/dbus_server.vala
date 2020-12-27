@@ -7,7 +7,7 @@
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -84,9 +84,8 @@ namespace pdfpc {
         }
 
         public string get_notes() throws GLib.Error {
-            var notes = this.controller.metadata.get_notes();
             return
-                notes.get_note_for_slide(controller.current_user_slide_number);
+                this.controller.metadata.get_note(controller.current_slide_number);
         }
     }
 }

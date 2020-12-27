@@ -28,7 +28,7 @@
 \mode<presentation>
 
 \title{\pdfpc demo}
-\subtitle{(for v4.4)}
+\subtitle{(for v4.5.0)}
 \author[D. Vilar \& E. Stambulchik]{Written by
                   \href{https://github.com/davvil}{David Vilar} \\
                   Updated by
@@ -214,16 +214,31 @@
 \end{frame}
 
 \begin{frame}
-  \frametitle{Annotation modes}
+  \frametitle{Pointer and spotlight}
   \begin{itemize}
-    \item \pdfpc has a built-in ``laser'' pointer. To switch the pointer
-      mode on, press \keys{2}
+    \item \pdfpc has a built-in ``laser'' pointer
       \begin{itemize}
+        \item To switch the pointer mode on, press \keys{2}
         \item The pointer size can be adjusted with the \keys{{+}} and \keys{-}
           keys
         \item A rectangular area can be highlighted by using the drag mouse
           motion
+        \item Press \keys{Z} to zoom in the highlighted area; \keys{esc} to exit
       \end{itemize}
+    \item The spotlight mode is similar to the pointer mode, but instead of
+      highlighting the spot by a different color, it shades the background
+      \begin{itemize}
+        \item To switch this mode on, press \keys{5}
+        \item The spot size can be adjusted with the \keys{{+}} and \keys{-}
+          keys, too
+      \end{itemize}
+    \item Press \keys{1} to return to the normal presentation mode
+  \end{itemize}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Drawings}
+  \begin{itemize}
     \item Press \keys{3} to enter the drawing mode with the pen tool selected
       \singleitem{Again, use \keys{{+}} and \keys{-} to alter the size of the
         drawing tool}
@@ -234,6 +249,20 @@
     \item The drawings will stay on the slides you made them
       \singleitem{Press \keys{D} to toggle them on/off globally}
     \item The drawings will \alert{not} be saved when you exit \pdfpc
+  \end{itemize}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Run-time GUI adjustment}
+  \begin{itemize}
+    \item If you started \pdfpc with the presenter view in the windowed mode,
+      it can be toggled to the fullscreen mode (and back) with \keys{W}
+    \item You may wish to maximally enlarge the main, current slide
+      view sometimes (e.g., to increase accuracy while drawing)
+      \singleitem{Press \keys{shift+A} to toggle this feature}
+    \item A general customization is enabled by pressing \keys{shift+C}
+      \singleitem{In this mode, mouse-draggable handles will appear}
+      \singleitem{Exit the customization with \keys{esc}}
   \end{itemize}
 \end{frame}
 
@@ -284,15 +313,62 @@
 \end{frame}
 
 \begin{frame}
+  \frametitle{Slide transitions}
+
+  \pdfpc supports almost all standard PDF page transitions, either between full
+  pages or inside overlays.
+
+  \singleitem{Obviously, transitions are enabled only in the presentation
+    window}
+
+  \only<1>{
+    \setbeamercolor{block body}{bg=red!40!blue!30}
+    \begin{block}{This slide will dissolve}
+      \vskip 4cm \hfill
+    \end{block}
+  }
+  \only<2>{
+    \setbeamercolor{block body}{bg=blue!40!green!30}
+    \begin{block}{This slide will be covered from above}
+      \vskip 4cm \hfill
+    \end{block}
+  }
+  \only<3>{
+    \setbeamercolor{block body}{bg=green!40!red!30}
+    \begin{block}{This slide will be pushed to the left}
+      \vskip 4cm \hfill
+    \end{block}
+  }
+
+  \transdissolve<2>
+  \transcover[direction=90]<3>
+\end{frame}
+
+\begin{frame}
+  \transpush<1>[direction=180]
+  \frametitle{Slide duration}
+
+  \pdfpc will also advance slides automatically if slide duration is specified.
+  \singleitem{Go ahead to see it in action!}
+  \vskip 1cm
+
+  \transduration<2-12>{0.2}
+  {\Huge\hfill
+  \onslide<2->H\onslide<3->e\onslide<4->l\onslide<5->l\onslide<6->o\onslide<7->,
+  \onslide<8->w\onslide<9->o\onslide<10->r\onslide<11->l\onslide<12->d\onslide<13->!
+  \hfill}
+\end{frame}
+
+\begin{frame}
   \frametitle{\opt{.pdfpc} files}
   \begin{itemize}
     \item The additional information needed for the presentation (duration,
-      notes, end slide, etc.) is stored in an additional file with extension
+      notes, end slide, etc.) is stored in an auxiliary file with extension
       \opt{.pdfpc}
     \item Most of the time this file is automatically handled
-    \item If you ever need to do changes by hand (e.g.\ if you modify the PDF
-      after defining the meta-information) it is a text-based format easy to
-      edit
+    \item If you ever need to do changes by hand (e.g., if you modify the PDF
+      after defining the meta-information), it is a text-based format (JSON)
+      easy to edit
   \end{itemize}
 \end{frame}
 

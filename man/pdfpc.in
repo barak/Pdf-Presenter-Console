@@ -43,6 +43,9 @@ presentation.
 .BI "\-e, \-\-end\-time"=T
 End time of the presentation. (Format: HH:MM (24h))
 .TP
+.BI "\-f, \-\-note\-format"=FORMAT
+Enforce format of notes (plain or markdown. Default: markdown)
+.TP
 .BI "\-g, \-\-disable\-auto\-grouping"
 Disable auto detection of overlay groups. (Default: enabled)
 .TP
@@ -69,6 +72,14 @@ developers.
 .TP
 .BI "\-P, \-\-page"
 Go to a specific page directly after startup. In case of overlays, the first slide will be displayed.
+.TP
+.BI "\-r, \-\-page\-transition"=TRANSITION
+Set default page transition. The TRANSITION specification is of the form
+type:duration:angle:alignment:direction. See the \fBPage transitions\fR section
+for the list of supported types. \fBduration\fR is in seconds. The three last
+settings are optional (and indeed meaningless for some of the transition types).
+The accepted values for \fBangle\fR are 0/90/180/270; \fBalignment\fR can be
+h[orizontal] of v[ertical] and \fBdirection\fR i[nward] or o[utward].
 .TP
 .BI "\-R, \-\-pdfpc\-location"=LOCATION
 Use custom pdfpc file.
@@ -295,7 +306,7 @@ The timer is started if you are navigating away from the first page for the
 first time.  This feature is quite useful as you may want to show the title page
 of your presentation while people are still entering the room and the
 presentation has not really begun yet.  If you want to start over you can
-use the \[aq]r\[aq] key which will make the presenter reset the timer.
+use the \[aq]Ctrl + t\[aq] key which will make the presenter reset the timer.
 .PP
 
 If a duration is given, the timer also provides hints aiding the presenter to
@@ -329,20 +340,21 @@ many minutes you are overtime.
 .SS Notes
 
 .PP
-Textual notes can be displayed for each slide.  A few types of PDF annotations
-are understood by pdfpc and will be automatically imported and displayed (only
-their textual content, no formatting attributes are preserved).  The PDF
-annotations can be made using many PDF editors and even viewers.  These "native"
-PDF notes cannot be edited in pdfpc.
+Textual notes can be displayed for each slide.  pdfpc understands the Markdown
+syntax, which allows for rendering anything from plain text to a very rich
+formatting, if so desired.  A few types of PDF annotations are understood by
+pdfpc and will be automatically imported and displayed. The PDF annotations can
+be made using many PDF editors and even viewers;  when using LaTeX, the
+\fBpdfpc\fR package (see below) provides a convenient macro.  These "native" PDF
+notes cannot be edited in pdfpc.
 .PP
-In addition, while in the presentation mode, pressing \[aq]Ctrl + n\[aq] will allow you
-to take notes for the current user slide.  To exit the note editing mode, press
-the Escape key.  Note that while editing a note, the keybindings stop working,
-i.e. you are not able to change slides. These notes are stored in the .pdfpc
-file in a plain text format, easy to edit also from outside the program; see
-the section about the pdfpc format below.  These notes take precedence over the
-native PDF annotations, i.e., if a user-proveded note exists for a given slide,
-any PDF annotations on that page will be silently ignored.
+In addition, while in the presentation mode, pressing \[aq]Ctrl + n\[aq] will
+allow you to take or edit notes for the current user slide.  To exit the note
+editing mode, press the Escape key.  These notes are stored in the .pdfpc file.
+They take precedence over the native PDF annotations, i.e., if a user-provided
+note exists for a given slide, any PDF annotations on that page will be silently
+ignored. While editing a note, the normal keybindings are disabled, e.g., you
+are not able to change slides.
 .PP
 Although mixing the
 two types of notes is possible, for a given presentation one will likely want to
@@ -416,6 +428,16 @@ actual presentation via the \[aq]Ctrl + e\[aq] key.
 This just changes the progress display in the presenter screen, as to
 have a better overview of how many slides are left.
 
+.SS Page transitions
+.PP
+Pdfpc supports almost all standard animated PDF page transitions: blinds, box,
+cover, dissolve, fade, glitter (except the diagonal one), push, split, uncover,
+and wipe, including various alignments, angles, and directions (where
+applicable). The transitions are enabled only for sequential (either forward or
+backward) movement; in the later case, the transition is "inverted".
+.PP
+Advancing slides automatically is also supported.
+
 .SS Movies
 .PP
 Pdfpc can play back movies included in the PDF file.  Movies may be started
@@ -462,12 +484,21 @@ See the bugs section for further information.
 
 .SS Pointer mode
 .PP
-If needed, it is possible to turn on a pointer which draws a red dot in the
-place pointed by mouse cursor on both - presenter and presentation screens.
-It is also possible to increase and decrease the pointer size. Additionally,
-when the pointer is enabled, it is possible to highlight some area of the
-current slide using the drag mouse motion. The area
-outside the selected region will be dimmed.
+If needed, it is possible to turn on a pointer which draws a red (by default)
+dot in the place pointed by mouse cursor on both presenter and presentation
+screens. It is also possible to increase and decrease the pointer size.
+Additionally, when the pointer is enabled, it is possible to highlight some area
+of the current slide using the drag mouse motion. The area outside the selected
+region will be dimmed. You can zoom in the selected area by pressing 'z'; press
+'Escape' to exit the zoom mode. You can highlight another region while zoomed
+in, but there will be no further action on pressing 'z'. Drawing is also
+disabled in this mode.
+
+.SS Spotlight mode
+.PP
+Spotlight mode is similar to the pointer mode: a circular area that moves with
+the mouse and can be adjusted in size, but instead of highlighting the spot by a
+different color, it shades the background.
 
 .SS Drawing mode
 .PP
@@ -501,13 +532,14 @@ full setup at the computer in advance.
 
 .SS pdfpc files
 .PP
-Some additional information is stored in a file with the extension
-"pdfpc".  When pdfpc is invoked with a PDF file, it automatically checks for
-and loads the associated .pdfpc file, if it exists.  This means that you
-normally do not have to deal with this kind of files explicitly.
+Notes, user-defined overlays, and some additional information is stored in a
+file with extension "pdfpc".  When pdfpc is invoked with a PDF file, it
+automatically checks for and loads the associated .pdfpc file, if it exists.
+This means that you normally do not have to deal with this kind of files
+explicitly.
 .PP
-Beside internal configuration, the following command-line
-options are stored within the pdfpc file for later usage:
+Beside internal configuration, the following command-line options are saved in
+the pdfpc file for later usage:
 
 .IP \[bu] 2
 duration
@@ -518,30 +550,9 @@ last_minutes
 .IP \[bu] 2
 notes (position)
 .IP \[bu] 2
+page_transition
+.IP \[bu] 2
 start_time
-
-.PP
-There are, however, cases where you may want to edit this file manually.
-The most typical case is if you add or remove some slides after you have
-edited notes or defined overlays.
-It may be quicker to edit the pdfpc file than to re-enter the whole
-information.
-
-.PP
-There is also the possibility of including notes from a different file.
-If pdfpc encounters a [notes_include] section with the .pdfpc file
-it reads the notes
-.B
-only
-from the included file. Changing notes within pdfpc is then forbidden.
-
-.PP
-The files are plain-text files that should be fairly self-explanatory.
-A couple of things to note:
-.IP \[bu] 2
-The slide numbers of the notes refer to user slides
-.IP \[bu] 2
-Slide indexes start at 1
 
 .SS Appearance
 
@@ -550,6 +561,11 @@ With GTK3 it is possible to modify the appearance of pdfpc. There are two
 locations where pdfpc is looking for files. The default location is
 @CMAKE_INSTALL_PREFIX@/share/pixmaps/pdfpc/pdfpc.css. It can be copied
 to $XDG_CONFIG_HOME/pdfpc/pdfpc.css and modified to the user's liking.
+.PP
+The geometry of various views (the current/next etc slide) in the presenter
+window can be adjusted at run time in the "Customization" mode, which is
+activated by pressing Shift+c. In this mode, mouse-draggable handles will
+appear. Exit the customization with Escape.
 
 .SS Desktop integration
 

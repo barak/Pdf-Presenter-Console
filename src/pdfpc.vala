@@ -13,7 +13,7 @@
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -57,6 +57,9 @@ namespace pdfpc {
             {"end-time", 'e', 0, OptionArg.STRING,
                 ref Options.end_time,
                 "End time of the presentation", "HH:MM"},
+            {"note-format", 'f', 0, OptionArg.STRING,
+                ref Options.notes_format,
+                "Enforce note format (plain|markdown)", "FORMAT"},
             {"disable-auto-grouping", 'g', 0, 0,
                 ref Options.disable_auto_grouping,
                 "Disable auto detection of overlays", null},
@@ -76,8 +79,11 @@ namespace pdfpc {
                 ref Options.no_install,
                 "Test pdfpc without installation", null},
             {"page", 'P', 0, OptionArg.INT,
-                ref Options.page,
+                ref Options.page_hnum,
                 "Go to page number N directly after startup", "N"},
+            {"page-transition", 'r', 0, OptionArg.STRING,
+                ref Options.default_transition,
+                "Set default page transition", "TYPE"},
             {"pdfpc-location", 'R', 0, OptionArg.STRING,
                 ref Options.pdfpc_location,
                 "Full path location to a pdfpc file", "PATH"},
@@ -147,9 +153,9 @@ namespace pdfpc {
          * Print version string and copyright statement
          */
         private void print_version() {
-            GLib.print("pdfpc v4.4.1\n"
+            GLib.print("pdfpc v4.5\n"
                      + "Copyright (C) 2010-2020 see CONTRIBUTORS\n\n"
-                     + "License GPLv2: GNU GPL version 2 <http://gnu.org/licenses/gpl-2.0.html>.\n"
+                     + "License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\n"
                      + "This is free software: you are free to change and redistribute it.\n"
                      + "There is NO WARRANTY, to the extent permitted by law.\n");
         }
@@ -434,15 +440,19 @@ namespace pdfpc {
                 this.controller.presenter.update();
             }
 
-            if (Options.page >= 1 &&
-                Options.page <= metadata.get_end_user_slide()) {
-                int u = metadata.user_slide_to_real_slide(Options.page - 1,
+            if (Options.page_hnum >= 1 &&
+                Options.page_hnum <= metadata.get_end_user_slide() + 1) {
+                int u = metadata.user_slide_to_real_slide(Options.page_hnum - 1,
                     false);
                 this.controller.switch_to_slide_number(u, true);
             } else {
                 GLib.printerr("Argument --page/-P must be between 1 and %d\n",
                     metadata.get_end_user_slide());
                 Process.exit(1);
+            }
+
+            if (Options.default_transition != null) {
+                metadata.set_default_transition_from_string(Options.default_transition);
             }
 
             // Handle monitor added/removed events.
@@ -497,6 +507,11 @@ namespace pdfpc {
                         presentation.connect_monitor(null);
                     }
                 });
+
+            var im_module = Environment.get_variable("GTK_IM_MODULE");
+            if (im_module == "xim") {
+                GLib.printerr("Warning: XIM is known to cause problems\n");
+            }
 
             // Enter the Glib eventloop
             // Everything from this point on is completely signal based

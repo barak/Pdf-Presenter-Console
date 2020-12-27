@@ -16,7 +16,7 @@
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -81,17 +81,58 @@ namespace pdfpc {
 
             // start the timer unless it's the initial positioning
             if (!this.history_bck.is_empty) {
+                this.running = true;
                 this.timer.start();
             }
 
             // clear the highlighted selection when switching to a new page
             if (this.current_user_slide_number != old_user_slide_number) {
-                highlight_w = 0;
-                highlight_h = 0;
+                this.highlight.width = 0;
+                this.highlight.height = 0;
+                this.in_zoom = false;
             }
 
             this.controllables_update();
         }
+
+        public void start_autoadvance_timer(int slide_number) {
+            double duration = this.metadata.get_slide_duration(slide_number);
+            if (duration < 0) {
+                return;
+            }
+
+            // no autoadvance if paused/not started yet
+            if (!this.running) {
+                return;
+            }
+
+            if (this.autoadvance_timeout_id != 0) {
+                GLib.Source.remove(this.autoadvance_timeout_id);
+                this.autoadvance_timeout_id = 0;
+            }
+
+            var next_slide = this.current_slide_number + 1;
+            if (duration > 0) {
+                this.autoadvance_timeout_id =
+                    GLib.Timeout.add((int) (1000*duration), () => {
+                        // check again - the paused state might be enabled
+                        // meantime
+                        if (this.running) {
+                            this.switch_to_slide_number(next_slide);
+                        }
+                        this.autoadvance_timeout_id = 0;
+                        return GLib.Source.REMOVE;
+                    });
+            } else {
+                // duration = 0, go to the next slide immediately
+                this.switch_to_slide_number(next_slide);
+            }
+        }
+
+        /**
+         * Started & not paused
+         */
+        public bool running { get; protected set; default = false; }
 
         /**
          * The current slide in "user indices"
@@ -116,6 +157,37 @@ namespace pdfpc {
          * Stores if the view is frozen
          */
         public bool frozen { get; protected set; default = false; }
+
+        /**
+         * Zoomed-in mode enabled?
+         */
+        public bool in_zoom { get; protected set; default = false; }
+
+        /**
+         * Customization mode enabled?
+         */
+        public bool in_customization { get; protected set; default = false; }
+
+        /**
+         * Normalized coordinates (0 .. 1), i.e. mapped to a unity square
+         */
+        public struct ScaledRectangle {
+            double x;
+            double y;
+            double width;
+            double height;
+        }
+
+        /**
+         * Highlighted area (in the pointer mode)
+         */
+        public ScaledRectangle highlight;
+
+        /**
+         * Stores the drawing & highlight states prior to zooming in
+         */
+        protected bool zoom_stack_drawing = false;
+        protected ScaledRectangle zoom_stack_highlight;
 
         /**
          * The number of slides in the presentation
@@ -234,6 +306,11 @@ namespace pdfpc {
         public signal void decrease_font_size_request();
 
         /**
+         * Signal: Zoom in/out
+         */
+        public signal void zoom_request(ScaledRectangle? rect);
+
+        /**
          * Controllables which are registered with this presentation controller.
          */
         protected Gee.List<Controllable> controllables;
@@ -253,7 +330,7 @@ namespace pdfpc {
 
                     this.timer = getTimerLabel(this,
                         (int) metadata.get_duration() * 60,
-                        metadata.start_time, metadata.end_time);
+                        metadata.get_start_time(), metadata.get_end_time());
                     this.timer.reset();
 
                     this.current_slide_number = 0;
@@ -369,6 +446,7 @@ namespace pdfpc {
         public enum AnnotationMode {
             NORMAL,
             POINTER,
+            SPOTLIGHT,
             PEN,
             ERASER;
 
@@ -382,6 +460,8 @@ namespace pdfpc {
                         return NORMAL;
                     case "pointer":
                         return POINTER;
+                    case "spotlight":
+                        return SPOTLIGHT;
                     case "pen":
                         return PEN;
                     case "eraser":
@@ -395,10 +475,59 @@ namespace pdfpc {
         private AnnotationMode annotation_mode = AnnotationMode.NORMAL;
 
         /**
+         * Generic pointer tool
+         */
+        public class PointerTool {
+            protected double red;
+            protected double green;
+            protected double blue;
+            protected double alpha;
+            public double size;
+
+            public bool is_spotlight {get; protected set;}
+
+            public PointerTool(bool is_spotlight = false) {
+                this.red   = 0.0;
+                this.green = 0.0;
+                this.blue  = 0.0;
+                this.alpha = 0.5;
+                this.size  = 1.0;
+
+                this.is_spotlight = is_spotlight;
+            }
+
+            public Gdk.RGBA get_rgba() {
+                Gdk.RGBA color = Gdk.RGBA();
+
+                color.red   = this.red;
+                color.green = this.green;
+                color.blue  = this.blue;
+                color.alpha = this.alpha;
+
+                return color;
+            }
+
+            public void set_rgba(Gdk.RGBA color) {
+                this.red   = color.red;
+                this.green = color.green;
+                this.blue  = color.blue;
+                this.alpha = color.alpha;
+            }
+        }
+
+        protected PointerTool pointer;
+        protected PointerTool spotlight;
+        public PointerTool? current_pointer { get; protected set; }
+
+        /**
          * Instantiate a new controller
          */
         public PresentationController() {
             this.controllables = new Gee.ArrayList<Controllable>();
+
+            this.pointer   = new PointerTool(false);
+            this.spotlight = new PointerTool(true);
+            this.current_pointer = null;
 
             this.history_bck = new Gee.ArrayQueue<int>();
             this.history_fwd = new Gee.ArrayQueue<int>();
@@ -447,6 +576,10 @@ namespace pdfpc {
             return this.annotation_mode == AnnotationMode.POINTER;
         }
 
+        public bool is_spotlight_active() {
+            return this.annotation_mode == AnnotationMode.SPOTLIGHT;
+        }
+
         public bool is_eraser_active() {
             return annotation_mode == AnnotationMode.ERASER;
         }
@@ -457,6 +590,10 @@ namespace pdfpc {
 
         public bool in_drawing_mode() {
             return is_eraser_active() || is_pen_active();
+        }
+
+        public bool in_pointing_mode() {
+            return is_pointer_active() || is_spotlight_active();
         }
 
         private void move_pen(double x, double y) {
@@ -510,8 +647,7 @@ namespace pdfpc {
         }
 
         protected void update_pen_drawing() {
-            pen_drawing.switch_to_slide(this.current_slide_number);
-            this.queue_pen_surface_draws();
+            pen_drawing.switch_to_slide(this.current_user_slide_number);
         }
 
         private void hide_or_show_pen_surfaces() {
@@ -534,7 +670,7 @@ namespace pdfpc {
         }
 
         private void hide_or_show_pointer_surfaces() {
-            if (this.annotation_mode == AnnotationMode.POINTER) {
+            if (this.in_pointing_mode()) {
                 if (presenter != null) {
                     presenter.enable_pointer(true);
                 }
@@ -556,6 +692,10 @@ namespace pdfpc {
                 return;
             }
 
+            if (this.in_zoom) {
+                return;
+            }
+
             this.annotation_mode = mode;
 
             switch (mode) {
@@ -563,6 +703,11 @@ namespace pdfpc {
                 break;
 
                 case AnnotationMode.POINTER:
+                    this.current_pointer = this.pointer;
+                break;
+
+                case AnnotationMode.SPOTLIGHT:
+                    this.current_pointer = this.spotlight;
                 break;
 
                 case AnnotationMode.PEN:
@@ -585,6 +730,10 @@ namespace pdfpc {
             hide_or_show_pen_surfaces();
 
             if (this.presenter != null) {
+                if (Options.maximize_in_drawing) {
+                    this.presenter.maximize_current_view(this.in_drawing_mode());
+                }
+
                 // Disable event compression for smoother drawing
                 this.presenter.main_view.get_window().set_event_compression(!in_drawing_mode());
             }
@@ -608,7 +757,15 @@ namespace pdfpc {
             this.set_mode(AnnotationMode.ERASER);
         }
 
+        public void set_spotlight_mode() {
+            this.set_mode(AnnotationMode.SPOTLIGHT);
+        }
+
         public void toggle_drawings() {
+            if (this.in_zoom) {
+                return;
+            }
+
             pen_drawing_present = !pen_drawing_present;
             if (!pen_drawing_present && in_drawing_mode()) {
                 this.set_mode(AnnotationMode.NORMAL);
@@ -625,27 +782,39 @@ namespace pdfpc {
         }
 
         private void init_pen_and_pointer() {
-            pointer_size = Options.pointer_size;
-            if (pointer_size > 500) {
-                pointer_size = 500;
+            this.pointer.size = Options.pointer_size;
+            if (this.pointer.size > 500) {
+                this.pointer.size = 500;
             }
-            if (pointer_color.parse(Options.pointer_color) != true) {
+            var rgba = Gdk.RGBA();
+            if (rgba.parse(Options.pointer_color) != true) {
                 GLib.printerr("Cannot parse color specification '%s'\n",
                     Options.pointer_color);
-                pointer_color.parse("red");
+                rgba.parse("red");
             }
             if (Options.pointer_opacity >= 0 && Options.pointer_opacity <= 100) {
-                pointer_color.alpha = (double) Options.pointer_opacity/100.0;
+                rgba.alpha = (double) Options.pointer_opacity/100.0;
             } else {
-                pointer_color.alpha = 1.0;
+                rgba.alpha = 1.0;
             }
+            this.pointer.set_rgba(rgba);
+
+            this.spotlight.size = Options.spotlight_size;
+            if (this.spotlight.size > 500) {
+                this.spotlight.size = 500;
+            }
+            rgba.parse("black");
+            if (Options.spotlight_opacity >= 0 && Options.spotlight_opacity <= 100) {
+                rgba.alpha = (double) Options.spotlight_opacity/100.0;
+            } else {
+                rgba.alpha = 0.5;
+            }
+            this.spotlight.set_rgba(rgba);
 
             this.update_request.connect(this.update_pen_drawing);
         }
 
-        public uint pointer_size;
-        private uint pointer_step = 5;
-        public Gdk.RGBA pointer_color;
+        protected uint pointer_step = 5;
 
         /**
          * Hide drawing custom pointer (pointer/pen/eraser) when mouse leaves
@@ -659,12 +828,10 @@ namespace pdfpc {
         protected uint pointer_timeout_id = 0;
 
         /**
-         * Normalized coordinates (0 .. 1), i.e. mapped to a unity square
+         * Timeout id to autoadvance to the next slide
          */
-        public double highlight_x;
-        public double highlight_y;
-        public double highlight_w;
-        public double highlight_h;
+        protected uint autoadvance_timeout_id = 0;
+
         public double drag_x = -1;
         public double drag_y = -1;
         public double pointer_x;
@@ -712,7 +879,7 @@ namespace pdfpc {
             view.leave_notify_event.connect(() => {
                     this.pointer_hidden = true;
                     // make sure the pointer is cleared
-                    if (this.is_pointer_active()) {
+                    if (this.in_pointing_mode()) {
                         this.queue_pointer_surface_draws();
                     } else if (this.in_drawing_mode()) {
                         this.queue_pen_surface_draws();
@@ -726,7 +893,7 @@ namespace pdfpc {
          * them to the presentation controller
          */
         private bool on_motion(Gdk.EventMotion event) {
-            if (this.annotation_mode == AnnotationMode.POINTER) {
+            if (this.in_pointing_mode()) {
                 return on_move_pointer(event);
             } else if (this.in_drawing_mode()) {
                 return on_move_pen(event);
@@ -739,8 +906,8 @@ namespace pdfpc {
             if (this.annotation_mode == AnnotationMode.POINTER) {
                 this.device_to_normalized(event.x, event.y,
                     out drag_x, out drag_y);
-                highlight_w = 0;
-                highlight_h = 0;
+                this.highlight.width = 0;
+                this.highlight.height = 0;
                 return true;
             } else if (this.in_drawing_mode()) {
                 double x, y;
@@ -829,23 +996,27 @@ namespace pdfpc {
 
         private void update_highlight(double x, double y) {
             if (drag_x!=-1) {
-                highlight_w=Math.fabs(drag_x-x);
-                highlight_h=Math.fabs(drag_y-y);
-                highlight_x=(drag_x<x?drag_x:x);
-                highlight_y=(drag_y<y?drag_y:y);
+                this.highlight.width=Math.fabs(drag_x-x);
+                this.highlight.height=Math.fabs(drag_y-y);
+                this.highlight.x=(drag_x<x?drag_x:x);
+                this.highlight.y=(drag_y<y?drag_y:y);
                 queue_pointer_surface_draws();
             }
         }
 
 
         public void increase_pointer_size() {
-            if (pointer_size<500) pointer_size+=pointer_step;
-            queue_pointer_surface_draws();
+            if (this.current_pointer.size < 500) {
+                this.current_pointer.size += this.pointer_step;
+                this.queue_pointer_surface_draws();
+            }
         }
 
         public void decrease_pointer_size() {
-            if (pointer_size>pointer_step) pointer_size-=pointer_step;
-            queue_pointer_surface_draws();
+            if (this.current_pointer.size > this.pointer_step) {
+                this.current_pointer.size -= this.pointer_step;
+                this.queue_pointer_surface_draws();
+            }
         }
 
         /**
@@ -976,7 +1147,7 @@ namespace pdfpc {
                 },
                 "Freeze the presentation screen");
 
-            add_action("overlay", this.toggle_skip,
+            add_action("overlay", this.add_overlay,
                 "Mark the current slide as an overlay slide");
             add_action("note", this.controllables_edit_note,
                 "Edit notes for the current slide");
@@ -991,7 +1162,8 @@ namespace pdfpc {
 
             add_action_with_parameter("switchMode", GLib.VariantType.STRING,
                 this.set_mode_to_string,
-                "Switch annotation mode (normal|pointer|pen|eraser)", "mode");
+                "Switch annotation mode (normal|pointer|pen|eraser|spotlight)",
+                "mode");
 
             add_action("increaseSize", this.increase_size,
                 "Increase the size of notes|pointer|pen|eraser");
@@ -1008,6 +1180,15 @@ namespace pdfpc {
 
             add_action("toggleToolbox", this.toggle_toolbox,
                 "Toggle the toolbox");
+
+            add_action("zoom", this.zoom_highlighted,
+                "Zoom in the highlighted area");
+
+            add_action("toggleMaxCurrent", this.toggle_max_current_view,
+                "(Un)maximize the current slide view");
+
+            add_action("customize", this.customize_gui,
+                "Customize the GUI");
 
             add_action("showHelp", this.show_help,
                 "Show a help screen");
@@ -1295,28 +1476,10 @@ namespace pdfpc {
         }
 
         /**
-         * Was the previous slide a skip one?
-         */
-        public bool skip_previous() {
-            return this.current_slide_number > 0 &&
-                this.current_user_slide_number ==
-                    this.metadata.real_slide_to_user_slide(this.current_slide_number - 1);
-        }
-
-        /**
-         * Is the next slide a skip one?
-         */
-        public bool skip_next() {
-            return this.current_slide_number < this.n_slides - 1 &&
-                this.current_user_slide_number ==
-                    this.metadata.real_slide_to_user_slide(this.current_slide_number + 1);
-        }
-
-        /**
          * Set the last slide as defined by the user
          */
         private void set_end_user_slide() {
-            this.metadata.set_end_user_slide(this.current_user_slide_number + 1);
+            this.metadata.set_end_user_slide(this.current_user_slide_number);
             this.controllables_update();
         }
 
@@ -1324,7 +1487,7 @@ namespace pdfpc {
          * Set the last slide as defined by the user
          */
         public void set_last_saved_slide() {
-            this.metadata.set_last_saved_slide(this.current_user_slide_number + 1);
+            this.metadata.set_last_saved_slide(this.current_user_slide_number);
             this.controllables_update();
             presenter.session_saved();
         }
@@ -1478,7 +1641,7 @@ namespace pdfpc {
          * Go to the last displayed slide
          */
         public void goto_last_saved_slide() {
-            var new_user_slide_number = this.metadata.get_last_saved_slide() - 1;
+            var new_user_slide_number = this.metadata.get_last_saved_slide();
             var new_slide_number = this.metadata.user_slide_to_real_slide(new_user_slide_number);
 
             this.switch_to_slide_number(new_slide_number);
@@ -1490,7 +1653,7 @@ namespace pdfpc {
          * Go to the last slide
          */
         public void goto_last() {
-            var new_user_slide_number = this.metadata.get_end_user_slide() - 1;
+            var new_user_slide_number = this.metadata.get_end_user_slide();
             var new_slide_number = this.metadata.user_slide_to_real_slide(new_user_slide_number);
 
             this.switch_to_slide_number(new_slide_number);
@@ -1500,6 +1663,7 @@ namespace pdfpc {
          * Go to the named slide
          */
         public void goto_string(Variant? page) {
+            this.running = true;
             this.timer.start();
 
             int destination = int.parse(page.get_string()) - 1;
@@ -1673,15 +1837,13 @@ namespace pdfpc {
         /**
          * Toggle skip for current slide
          */
-        protected void toggle_skip() {
-            if (overview_shown) {
-                int user_selected = this.overview.current_slide;
-                int slide_number = this.metadata.user_slide_to_real_slide(user_selected);
-                if (this.metadata.toggle_skip(slide_number, user_selected) != 0) {
+        protected void add_overlay() {
+            if (this.metadata.add_overlay(this.current_slide_number) != 0) {
+                if (overview_shown) {
                     this.overview.remove_current(this.user_n_slides);
+                } else {
+                    this.overview.set_n_slides(this.user_n_slides);
                 }
-            } else {
-                this.overview.set_n_slides(this.user_n_slides);
                 this.controllables_update();
             }
         }
@@ -1690,7 +1852,10 @@ namespace pdfpc {
          * Start the presentation (-> timer)
          */
         protected void start() {
+            this.running = true;
             this.timer.start();
+            // start the autoadvancing on the initial page, if needed
+            this.start_autoadvance_timer(this.current_slide_number);
             this.controllables_update();
         }
 
@@ -1698,7 +1863,11 @@ namespace pdfpc {
          * Pause the timer
          */
         public void toggle_pause() {
+            this.running = !this.running;
             this.timer.pause();
+            if (this.running) {
+                this.start_autoadvance_timer(this.current_slide_number);
+            }
             this.controllables_update();
         }
 
@@ -1757,16 +1926,17 @@ namespace pdfpc {
         protected void increase_size() {
             switch (this.annotation_mode) {
                 case AnnotationMode.NORMAL:
-                this.increase_font_size();
+                    this.increase_font_size();
                 break;
 
                 case AnnotationMode.POINTER:
-                this.increase_pointer_size();
+                case AnnotationMode.SPOTLIGHT:
+                    this.increase_pointer_size();
                 break;
 
                 case AnnotationMode.PEN:
                 case AnnotationMode.ERASER:
-                this.increase_pen_size();
+                    this.increase_pen_size();
                 break;
             }
         }
@@ -1777,16 +1947,17 @@ namespace pdfpc {
         protected void decrease_size() {
             switch (this.annotation_mode) {
                 case AnnotationMode.NORMAL:
-                this.decrease_font_size();
+                    this.decrease_font_size();
                 break;
 
                 case AnnotationMode.POINTER:
-                this.decrease_pointer_size();
+                case AnnotationMode.SPOTLIGHT:
+                    this.decrease_pointer_size();
                 break;
 
                 case AnnotationMode.PEN:
                 case AnnotationMode.ERASER:
-                this.decrease_pen_size();
+                    this.decrease_pen_size();
                 break;
             }
         }
@@ -1799,6 +1970,80 @@ namespace pdfpc {
             this.controllables_update();
         }
 
+        protected void zoom_highlighted() {
+            if (!this.in_zoom) {
+                this.toggle_zoom();
+            }
+        }
+
+        protected void toggle_max_current_view() {
+            if (this.presenter != null) {
+                var onoff = !this.presenter.current_view_maximized;
+                this.presenter.maximize_current_view(onoff);
+            }
+        }
+
+        protected void customize_gui() {
+            if (this.presenter != null) {
+                this.presenter.set_customizable(true);
+                this.in_customization = true;
+            }
+        }
+
+        /**
+         * Zoom in the highlighted area
+         */
+        protected void toggle_zoom() {
+            if (!this.in_zoom) {
+                if (this.annotation_mode != AnnotationMode.POINTER ||
+                    this.highlight.width  <= 0.01 ||
+                    this.highlight.height <= 0.01) {
+                    return;
+                }
+
+                this.zoom_request(this.highlight);
+
+                /* keep the state to be altered by zoom */
+                this.zoom_stack_highlight = this.highlight;
+                this.zoom_stack_drawing   = this.pen_drawing_present;
+
+                // update the selection
+                if (this.highlight.width > this.highlight.height) {
+                    this.highlight.height /= this.highlight.width;
+                    this.highlight.width = 1;
+                    this.highlight.x = 0;
+                    this.highlight.y = (1 - this.highlight.height)/2;
+                } else {
+                    this.highlight.width /= this.highlight.height;
+                    this.highlight.height = 1;
+                    this.highlight.x = (1 - this.highlight.width)/2;
+                    this.highlight.y = 0;
+                }
+
+                // switch off the drawings
+                if (this.pen_drawing_present) {
+                    this.toggle_drawings();
+                }
+
+                this.in_zoom = true;
+            } else {
+                this.zoom_request(null);
+
+                this.in_zoom = false;
+
+                // restore the drawings and the highlighted area
+                if (this.zoom_stack_drawing) {
+                    this.toggle_drawings();
+                }
+                this.highlight = this.zoom_stack_highlight;
+            }
+
+            this.queue_pointer_surface_draws();
+        }
+
+        /**
+         * Show help
+         */
         public void show_help() {
             if (this.presenter != null) {
                 this.presenter.show_help_window(true);
@@ -1814,6 +2059,13 @@ namespace pdfpc {
             }
             if (this.timer.is_paused()) {
                 this.toggle_pause();
+            }
+            if (this.in_zoom) {
+                this.toggle_zoom();
+            }
+            if (this.in_customization && this.presenter != null) {
+                this.presenter.set_customizable(false);
+                this.in_customization = false;
             }
         }
 
