@@ -9,7 +9,7 @@ Build-Depends: debhelper-compat (= 13),
 	       libgtk-3-dev,
 	       libgstreamer1.0-dev, libgstreamer-plugins-base1.0-dev,
 	       libpoppler-glib-dev
-Standards-Version: 4.5.0
+Standards-Version: 4.5.1
 Rules-Requires-Root: no
 Homepage: https://pdfpc.github.io
 Vcs-Git: https://salsa.debian.org/debian/pdf-presenter-console.git
