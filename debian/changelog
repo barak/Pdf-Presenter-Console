@@ -1,11 +1,12 @@
 pdf-presenter-console (4.5.0-1) unstable; urgency=medium
 
   * New upstream release
-  * Upstream copyright now GNU GPL-3 (or later)
+    - Upstream copyright now GNU GPL-3 (or later)
+    - Add new build dependencies
+    - SUPPORT.txt renamed to SUPPORT.rst
   * Bump policy
-  * Add new build dependencies
 
- -- Barak A. Pearlmutter <bap@debian.org>  Mon, 28 Dec 2020 13:57:39 +0000
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 28 Dec 2020 15:11:19 +0000
 
 pdf-presenter-console (4.4.1-1) unstable; urgency=medium
 
