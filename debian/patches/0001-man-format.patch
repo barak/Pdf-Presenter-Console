@@ -1,0 +1,23 @@
+From: "Barak A. Pearlmutter" <barak+git@pearlmutter.net>
+Date: Mon, 28 Dec 2020 16:50:10 +0000
+Subject: man format
+
+Cannot start a line of a man page with a ' character, work around with
+\(aq which generates the same glyph.
+---
+ man/pdfpc.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/man/pdfpc.in b/man/pdfpc.in
+index 1db8f23..fb8370c 100644
+--- a/man/pdfpc.in
++++ b/man/pdfpc.in
+@@ -490,7 +490,7 @@ screens. It is also possible to increase and decrease the pointer size.
+ Additionally, when the pointer is enabled, it is possible to highlight some area
+ of the current slide using the drag mouse motion. The area outside the selected
+ region will be dimmed. You can zoom in the selected area by pressing 'z'; press
+-'Escape' to exit the zoom mode. You can highlight another region while zoomed
++\(aqEscape\(aq to exit the zoom mode. You can highlight another region while zoomed
+ in, but there will be no further action on pressing 'z'. Drawing is also
+ disabled in this mode.
+ 
