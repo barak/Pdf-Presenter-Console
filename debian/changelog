@@ -1,3 +1,10 @@
+pdf-presenter-console (4.5.0-3) unstable; urgency=medium
+
+  * Track upstream maintenance branch
+  * Update standards version to 4.6.0, no changes needed.
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 02 Nov 2021 12:58:20 -0000
+
 pdf-presenter-console (4.5.0-2) unstable; urgency=medium
 
   * Track upstream maintenance branch
