@@ -312,6 +312,37 @@ namespace pdfpc {
          */
         public static bool final_slide_overlay = false;
 
+        /**
+         * If the next slide is an overlay group, show the first slide of
+         * that group in "next slide" view instead of the last slide.
+         */
+        public static bool next_slide_first_overlay = false;
+#if REST
+        /**
+         * Run REST server
+         */
+        public static bool enable_rest = false;
+
+        /**
+         * REST server port
+         */
+        public static int rest_port = 0;
+
+        /**
+         * Enable HTTPS protocol for REST
+         */
+        public static bool rest_https = false;
+
+        /**
+         * REST password
+         */
+        public static string? rest_passwd = null;
+
+        /**
+         * REST root path for serving static content
+         */
+        public static string rest_static_root = "www";
+#endif
         public class BindTuple {
             public string type;
             public uint keyCode;

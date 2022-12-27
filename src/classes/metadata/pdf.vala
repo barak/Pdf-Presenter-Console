@@ -57,6 +57,11 @@ namespace pdfpc.Metadata {
         public bool forced_overlay;
 
         /**
+         * Slide to be skipped in the normal flow
+         */
+        public bool hidden;
+
+        /**
          * Note
          */
         public SlideNote note;
@@ -64,7 +69,8 @@ namespace pdfpc.Metadata {
 
 
     public errordomain MetaFileError {
-        INVALID_FORMAT
+        INVALID_FORMAT,
+        UNSUPPORTED_VERSION
     }
 
     /**
@@ -88,7 +94,9 @@ namespace pdfpc.Metadata {
         /**
          * Poppler document of the associated PDF file
          */
-        protected Poppler.Document document;
+        public Poppler.Document document {
+            get; protected set;
+        }
 
         /**
          * Number of pages in the PDF document
@@ -117,7 +125,7 @@ namespace pdfpc.Metadata {
         /**
          * Current version of the .pdfpc format
          */
-        protected int format_version = 1;
+        protected int format_version = 2;
 
         /**
          * Flag that the .pdfpc metadata have been modified by user, either
@@ -180,6 +188,14 @@ namespace pdfpc.Metadata {
 
         // END .pdfpc meta
 
+        protected PageMeta? get_page_meta(int slide_number) {
+            if (slide_number >= 0 && slide_number < this.pages.size) {
+                return this.pages.get(slide_number);
+            } else {
+                return null;
+            }
+        }
+
         public bool is_ready {
             get {
                 return (this.document != null);
@@ -203,7 +219,7 @@ namespace pdfpc.Metadata {
         public void set_note(string note_text, int slide_number,
             bool is_native = false) {
 
-            var page = this.pages.get(slide_number);
+            var page = this.get_page_meta(slide_number);
             if (page != null) {
                 if (page.note == null) {
                     page.note = new SlideNote();
@@ -223,7 +239,7 @@ namespace pdfpc.Metadata {
          * Return the text of a note
          */
         public string get_note(int slide_number) {
-            var page = this.pages.get(slide_number);
+            var page = this.get_page_meta(slide_number);
             if (page != null && page.note != null) {
                 return page.note.note_text;
             } else {
@@ -232,7 +248,7 @@ namespace pdfpc.Metadata {
         }
 
         public bool is_note_read_only(int slide_number) {
-            var page = this.pages.get(slide_number);
+            var page = this.get_page_meta(slide_number);
             if (page != null && page.note != null) {
                 return page.note.is_native;
             } else {
@@ -304,7 +320,7 @@ namespace pdfpc.Metadata {
                 }
 
                 // Only save pages with user-defined metadata
-                if (page.forced_overlay ||
+                if (page.forced_overlay || page.hidden ||
                     (page.note != null    &&
                      !page.note.is_native &&
                      page.note.note_text != null)) {
@@ -318,6 +334,10 @@ namespace pdfpc.Metadata {
                     builder.add_int_value(overlay);
                     if (page.forced_overlay) {
                         builder.set_member_name("forcedOverlay");
+                        builder.add_boolean_value(true);
+                    }
+                    if (page.hidden) {
+                        builder.set_member_name("hidden");
                         builder.add_boolean_value(true);
                     }
                     if (page.note != null &&
@@ -360,7 +380,7 @@ namespace pdfpc.Metadata {
 	    unowned Json.Object obj = node.get_object();
             string page_label = "", note = "";
             int idx = -1, overlay = 0, slide_number = -1;
-            bool forced_overlay = false;
+            bool forced_overlay = false, hidden = false;
             foreach (unowned string name in obj.get_members()) {
                 unowned Json.Node item = obj.get_member(name);
                 switch (name) {
@@ -376,6 +396,9 @@ namespace pdfpc.Metadata {
                 case "forcedOverlay":
 		    forced_overlay = item.get_boolean();
 		    break;
+                case "hidden":
+		    hidden = item.get_boolean();
+		    break;
                 case "note":
 		    note = item.get_string();
 		    break;
@@ -388,20 +411,20 @@ namespace pdfpc.Metadata {
             // Try to lookup the page by label; if fails, use the page index
             if (page_label != "") {
                 // first, try fast access by index
-                var page = this.pages.get(idx);
+                var page = this.get_page_meta(idx);
                 if (page != null &&
                     page.label == page_label &&
                     slide_get_overlay(idx) == overlay) {
                     slide_number = idx;
                 } else {
                     for (int i = 0; i < this.page_count; i++) {
-                        page = this.pages.get(i);
+                        page = this.get_page_meta(i);
                         if (page.label == page_label) {
                             slide_number = i + overlay;
                             break;
                         }
                     }
-                    page = this.pages.get(slide_number);
+                    page = this.get_page_meta(slide_number);
                     if (page == null || page.label != page_label) {
                         // Return to fallback
                         slide_number = idx;
@@ -411,6 +434,7 @@ namespace pdfpc.Metadata {
                 slide_number = idx;
             }
 
+            this.set_slide_hidden(slide_number, hidden);
             if (forced_overlay) {
                 this.add_overlay(slide_number);
             }
@@ -449,8 +473,8 @@ namespace pdfpc.Metadata {
                     case "pdfpcFormat":
 			int format = (int) item.get_int();
                         // In future, parse depending on the version
-                        if (format != this.format_version) {
-                            throw new MetaFileError.INVALID_FORMAT(
+                        if (format > this.format_version) {
+                            throw new MetaFileError.UNSUPPORTED_VERSION(
                                 "Unsupported pdfpc format version %d", format);
                         }
 			break;
@@ -476,16 +500,16 @@ namespace pdfpc.Metadata {
 			this.notes_position =
                             NotesPosition.from_string(item.get_string());
 			break;
-                     case "defaultTransition":
+                    case "defaultTransition":
 			this.set_default_transition_from_string(item.get_string());
 			break;
-                   case "disableMarkdown":
+                    case "disableMarkdown":
 			this.disable_markdown = item.get_boolean();
 			break;
-                   case "noteFontSize":
+                    case "noteFontSize":
 			this.font_size = (int) item.get_int();
 			break;
-                   case "pages":
+                    case "pages":
 			this.parse_pdfpc_pages(item);
 			break;
 		    default:
@@ -628,7 +652,7 @@ namespace pdfpc.Metadata {
                         user_slide_to_real_slide(user_slide, false);
                     // Assign to all slides from the same user slide
                     for (int i = slide_number; i < this.page_count; i++) {
-                        var page = this.pages.get(i);
+                        var page = this.get_page_meta(i);
                         if (page.user_slide == user_slide) {
                             set_note(notes_unescaped, i, false);
                         } else {
@@ -856,6 +880,7 @@ namespace pdfpc.Metadata {
                 mapping.deactivate();
             }
             this.action_mapping.clear();
+            this.mapping_page_num = -1;
         }
 
         /**
@@ -880,20 +905,22 @@ namespace pdfpc.Metadata {
                 foreach(unowned Poppler.AnnotMapping am in anns) {
                     var a = am.annot;
                     switch (a.get_annot_type()) {
-                        case Poppler.AnnotType.TEXT:
-                        case Poppler.AnnotType.FREE_TEXT:
-                        case Poppler.AnnotType.HIGHLIGHT:
-                        case Poppler.AnnotType.UNDERLINE:
-                        case Poppler.AnnotType.SQUIGGLY:
-                            if (note_text.length > 0) {
-                                note_text += "\n";
-                            }
-                            note_text += a.get_contents();
+                    case Poppler.AnnotType.TEXT:
+                    case Poppler.AnnotType.FREE_TEXT:
+                    case Poppler.AnnotType.HIGHLIGHT:
+                    case Poppler.AnnotType.UNDERLINE:
+                    case Poppler.AnnotType.SQUIGGLY:
+                        if (note_text.length > 0) {
+                            note_text += "\n";
+                        }
+                        note_text += a.get_contents();
 
-                            // Remove the annotation to avoid its rendering
-                            page.remove_annot(a);
+                        // Remove the annotation to avoid its rendering
+                        page.remove_annot(a);
 
-                            break;
+                        break;
+                    default:
+                        break;
                     }
                 }
                 if (note_text != "") {
@@ -921,7 +948,8 @@ namespace pdfpc.Metadata {
                             this.duration = int.parse(entry.value);
                             break;
                         case "EndUserSlide":
-                            this.end_user_slide = int.parse(entry.value);
+                            // all slide numbering is 0-based internally
+                            this.end_user_slide = int.parse(entry.value) - 1;
                             break;
                         case "StartTime":
                             this.start_time = entry.value;
@@ -1021,9 +1049,14 @@ namespace pdfpc.Metadata {
                     parse_pdfpc_file();
                 } catch (GLib.Error e) {
                     GLib.printerr("%s\n", e.message);
-                    // Try old-style format
-                    parse_pdfpc_file_old(out notes_content_old, out skip_line_old);
-                    old_pdfpc = true;
+                    if (e.code == MetaFileError.UNSUPPORTED_VERSION) {
+                        Process.exit(1);
+                    } else {
+                        // Try old-style format
+                        parse_pdfpc_file_old(out notes_content_old,
+                            out skip_line_old);
+                        old_pdfpc = true;
+                    }
                 }
             }
 
@@ -1051,10 +1084,6 @@ namespace pdfpc.Metadata {
             }
             if (Options.end_time != null) {
                 this.set_end_time(Options.end_time);
-            }
-            // If end_time is set, reset duration to 0
-            if (this.end_time != null) {
-                this.set_duration(0);
             }
 
             if (Options.last_minutes != 0) {
@@ -1099,7 +1128,7 @@ namespace pdfpc.Metadata {
                 string previous_label = null;
                 int user_slide = -1;
                 for (int i = 0; i < this.page_count; ++i) {
-                    var page = this.pages.get(i);
+                    var page = this.get_page_meta(i);
                     // Auto-detect which pages to skip, but respect overlays
                     // forcefully set by the user
                     string this_label = page.label;
@@ -1134,7 +1163,7 @@ namespace pdfpc.Metadata {
          */
         public int get_user_slide_count() {
             if (this.page_count > 0) {
-                var page = this.pages.get((int) this.page_count - 1);
+                var page = this.get_page_meta((int) this.page_count - 1);
                 return page.user_slide + 1;
             } else {
                 return 0;
@@ -1259,14 +1288,14 @@ namespace pdfpc.Metadata {
                 // We cannot skip the first slide
                 return 0;
             }
-            var prev_page = this.pages.get(slide_number - 1);
+            var prev_page = this.get_page_meta(slide_number - 1);
             if (prev_page == null) {
                 // Something is terribly wrong...
                 return 0;
             }
             int prev_user_slide_number = prev_page.user_slide;
 
-            var page = this.pages.get(slide_number);
+            var page = this.get_page_meta(slide_number);
             if (page == null || page.user_slide == prev_user_slide_number) {
                 // Nothing to do
                 return 0;
@@ -1274,13 +1303,98 @@ namespace pdfpc.Metadata {
             page.forced_overlay = true;
 
             for (int i = slide_number; i < this.page_count; i++) {
-                page = this.pages.get(i);
+                page = this.get_page_meta(i);
                 page.user_slide--;
             }
 
             this.dirty_state = true;
 
             return -1;
+        }
+
+        /**
+         * Get the "hidden" flag of a slide
+         *
+         * Note that for an invalid slide_number it returns false
+         */
+        public bool get_slide_hidden(int slide_number) {
+            var page = this.get_page_meta(slide_number);
+            if (page == null) {
+                return false;
+            } else {
+                return page.hidden;
+            }
+        }
+
+        /**
+         * Set the "hidden" flag of a slide
+         *
+         * If the new state = hidden, return the offset to the next
+         * non-hidden slide
+         */
+        public int set_slide_hidden(int slide_number, bool onoff) {
+            var page = this.get_page_meta(slide_number);
+            if (page == null || page.hidden == onoff) {
+                // Nothing to do
+                return 0;
+            }
+
+            page.hidden = onoff;
+            this.dirty_state = true;
+
+            if (onoff) {
+                for (int i = slide_number; i < this.page_count; i++) {
+                    page = this.get_page_meta(i);
+                    if (page != null && !page.hidden) {
+                        return i - slide_number;
+                    }
+                }
+
+                // if we're here, it was the last non-hidden slide;
+                // let's move backwards
+                for (int i = slide_number - 1; i >= 0; i--) {
+                    page = this.get_page_meta(i);
+                    if (page != null && !page.hidden) {
+                        return i - slide_number;
+                    }
+                }
+            }
+
+            return 0;
+        }
+
+        /**
+         * Check whether a user slide is (at least partially) hidden
+         *
+         * Note that for an invalid user_slide it returns false
+         */
+        public bool get_user_slide_hidden(int user_slide) {
+            int slide_number = user_slide_to_real_slide(user_slide, false);
+            do {
+                if (get_slide_hidden(slide_number)) {
+                    return true;
+                }
+                slide_number++;
+            } while (slide_number < this.page_count &&
+                     real_slide_to_user_slide(slide_number) == user_slide);
+
+            return false;
+        }
+
+        /**
+         * Find a nearest non-hidden slide, optionally looking up backwards
+         */
+        public int nearest_nonhidden(int slide_number, bool backwards = false) {
+            int new_slide_number = slide_number;
+            while (this.get_slide_hidden(new_slide_number)) {
+                if (backwards) {
+                    new_slide_number--;
+                } else {
+                    new_slide_number++;
+                }
+            }
+
+            return new_slide_number;
         }
 
         /**
@@ -1295,14 +1409,14 @@ namespace pdfpc.Metadata {
             } else {
                 if (lastSlide) {
                     for (int i = (int)this.page_count - 1; i >= 0; i--) {
-                        var page = this.pages.get(i);
+                        var page = this.get_page_meta(i);
                         if (page.user_slide == number) {
                             return i;
                         }
                     }
                 } else {
                     for (int i = 0; i < this.page_count; i++) {
-                        var page = this.pages.get(i);
+                        var page = this.get_page_meta(i);
                         if (page.user_slide == number) {
                             return i;
                         }
@@ -1324,7 +1438,7 @@ namespace pdfpc.Metadata {
             } else if (number >= this.page_count) {
                 return this.get_user_slide_count() - 1;
             } else {
-                var page = this.pages.get(number);
+                var page = this.get_page_meta(number);
                 return page.user_slide;
             }
         }
@@ -1494,13 +1608,6 @@ namespace pdfpc.Metadata {
         }
 
         /**
-         * Return the Poppler.Document associated with this file
-         */
-        public Poppler.Document get_document() {
-            return this.document;
-        }
-
-        /**
          * Return the PDF title
          */
         public string get_title() {
@@ -1553,11 +1660,13 @@ namespace pdfpc.Metadata {
             if (page_num != this.mapping_page_num) {
                 this.deactivate_mappings();
 
-                GLib.List<Poppler.LinkMapping> link_mappings;
-                link_mappings = this.get_document().get_page(page_num).get_link_mapping();
+                var page = this.document.get_page(page_num);
+
+                var link_mappings = page.get_link_mapping();
                 foreach (unowned Poppler.LinkMapping mapping in link_mappings) {
                     foreach (var blank in blanks) {
-                        var action = blank.new_from_link_mapping(mapping, this.controller, this.document);
+                        var action = blank.new_from_link_mapping(mapping,
+                            this.controller);
                         if (action != null) {
                             this.action_mapping.add(action);
                             break;
@@ -1565,11 +1674,11 @@ namespace pdfpc.Metadata {
                     }
                 }
 
-                GLib.List<Poppler.AnnotMapping> annot_mappings;
-                annot_mappings = this.get_document().get_page(page_num).get_annot_mapping();
+                var annot_mappings = page.get_annot_mapping();
                 foreach (unowned Poppler.AnnotMapping mapping in annot_mappings) {
                     foreach (var blank in blanks) {
-                        var action = blank.new_from_annot_mapping(mapping, this.controller, this.document);
+                        var action = blank.new_from_annot_mapping(mapping,
+                            this.controller);
                         if (action != null) {
                             this.action_mapping.add(action);
                             break;
@@ -1580,6 +1689,21 @@ namespace pdfpc.Metadata {
                 this.mapping_page_num = page_num;
             }
             return this.action_mapping;
+        }
+
+        /**
+         * Return slide number corresponding to a named destination
+         */
+        public int find_dest(Poppler.Dest dest) {
+            if (dest.type == Poppler.DestType.NAMED) {
+                var found_dest =
+                    this.document.find_dest(dest.named_dest);
+                if (found_dest != null) {
+                    return found_dest.page_num - 1;
+                }
+            }
+
+            return -1;
         }
 
         public bool has_beamer_notes {

@@ -81,8 +81,7 @@ namespace pdfpc {
 
             // start the timer unless it's the initial positioning
             if (!this.history_bck.is_empty) {
-                this.running = true;
-                this.timer.start();
+                this.timer.run();
             }
 
             // clear the highlighted selection when switching to a new page
@@ -95,6 +94,20 @@ namespace pdfpc {
             this.controllables_update();
         }
 
+        /**
+         * Progress status of the talk
+         */
+        public enum ProgressStatus {
+            PreTalk,
+            Normal,
+            Slow,
+            Fast,
+            LastMinutes,
+            Overtime;
+        }
+
+        public ProgressStatus progress_status { get; protected set; }
+
         public void start_autoadvance_timer(int slide_number) {
             double duration = this.metadata.get_slide_duration(slide_number);
             if (duration < 0) {
@@ -102,7 +115,7 @@ namespace pdfpc {
             }
 
             // no autoadvance if paused/not started yet
-            if (!this.running) {
+            if (!this.is_running()) {
                 return;
             }
 
@@ -112,12 +125,13 @@ namespace pdfpc {
             }
 
             var next_slide = this.current_slide_number + 1;
+            next_slide = metadata.nearest_nonhidden(next_slide);
             if (duration > 0) {
                 this.autoadvance_timeout_id =
                     GLib.Timeout.add((int) (1000*duration), () => {
                         // check again - the paused state might be enabled
                         // meantime
-                        if (this.running) {
+                        if (this.is_running()) {
                             this.switch_to_slide_number(next_slide);
                         }
                         this.autoadvance_timeout_id = 0;
@@ -132,7 +146,16 @@ namespace pdfpc {
         /**
          * Started & not paused
          */
-        public bool running { get; protected set; default = false; }
+        public bool is_running() {
+            return this.timer.is_running();
+        }
+
+        /**
+         * Paused
+         */
+        public bool is_paused() {
+            return this.timer.is_paused();
+        }
 
         /**
          * The current slide in "user indices"
@@ -311,9 +334,73 @@ namespace pdfpc {
         public signal void zoom_request(ScaledRectangle? rect);
 
         /**
+         * Signal: Fired when the timer label changes
+         */
+        public signal void timer_change(string label);
+
+        /**
          * Controllables which are registered with this presentation controller.
          */
         protected Gee.List<Controllable> controllables;
+
+#if REST
+        /**
+         * The REST server object
+         */
+        public RestServer rest_server { get; protected set; }
+#endif
+
+        protected void on_timer_change(int talk_time, Timer.State state,
+            string label) {
+            int duration = this.timer.duration;
+            this.progress_status = ProgressStatus.Normal;
+
+            if (state == Timer.State.PreTalk) {
+                this.progress_status = ProgressStatus.PreTalk;
+            } else if (duration > 0) {
+                if (talk_time >= duration) {
+                    this.progress_status = ProgressStatus.Overtime;
+                } else if (Options.timer_pace_color) {
+                    // Indication of too slow/fast pace independently
+                    // of the time left.
+
+                    // Assuming we're in the middle of the current slide
+                    double expected_progress =
+                        (this.current_user_slide_number + 0.5)/this.user_n_slides;
+
+                    int expected_time = (int) (duration*expected_progress);
+
+                    if (talk_time > expected_time + 60) {
+                        this.progress_status = ProgressStatus.Slow;
+                    } else if (talk_time < expected_time - 60) {
+                        this.progress_status = ProgressStatus.Fast;
+                    } else {
+                        this.progress_status = ProgressStatus.Normal;
+                    }
+                } else {
+                    // Old "last-minutes" warning
+                    int time_left = duration - talk_time;
+                    if (time_left < 60*this.metadata.get_last_minutes()) {
+                        this.progress_status = ProgressStatus.LastMinutes;
+                    }
+                }
+            }
+
+            string sym;
+            switch (timer.get_mode()) {
+            case Timer.Mode.CountUp:
+                sym = " \u2b08";
+                break;
+            case Timer.Mode.CountDown:
+                sym = " \u2b0a";
+                break;
+            default:
+                sym = "";
+                break;
+            }
+
+            this.timer_change(label + sym);
+        }
 
         /**
          * The metadata of the presentation
@@ -328,15 +415,26 @@ namespace pdfpc {
                 if (value != null) {
                     this.metadata.controller = this;
 
-                    this.timer = getTimerLabel(this,
-                        (int) metadata.get_duration() * 60,
+                    this.timer = new Timer((int) (60*metadata.get_duration()),
                         metadata.get_start_time(), metadata.get_end_time());
-                    this.timer.reset();
+                    if (Options.use_time_of_day) {
+                        this.timer.set_mode(Timer.Mode.Clock);
+                    }
+                    this.timer.change.connect(on_timer_change);
 
                     this.current_slide_number = 0;
 
                     this.pen_drawing = Drawings.create(metadata);
                     current_pen_drawing_tool = pen_drawing.pen;
+
+#if REST
+                    // Start the REST server
+                    if (Options.enable_rest) {
+                        this.rest_server =
+                            new RestServer(metadata, Options.rest_port);
+                        this.rest_server.start();
+                    }
+#endif
                 }
             }
         }
@@ -368,10 +466,9 @@ namespace pdfpc {
         private Gee.ArrayQueue<int> history_fwd;
 
         /**
-         * Timer for the presentation. It should only be displayed on one view.
-         * We hope the controllables behave accordingly.
+         * Timer for the presentation
          */
-        protected TimerLabel timer;
+        protected Timer timer;
 
         protected delegate void callback();
         protected delegate void callback_with_parameter(GLib.Variant? parameter);
@@ -594,6 +691,25 @@ namespace pdfpc {
 
         public bool in_pointing_mode() {
             return is_pointer_active() || is_spotlight_active();
+        }
+
+        public bool in_normal_mode() {
+            return annotation_mode == AnnotationMode.NORMAL;
+        }
+
+        public string get_mode_string() {
+            switch (this.annotation_mode) {
+                case POINTER:
+                    return "pointer";
+                case SPOTLIGHT:
+                    return "spotlight";
+                case PEN:
+                    return "pen";
+                case ERASER:
+                    return "eraser";
+                default:
+                    return "normal";
+            }
         }
 
         private void move_pen(double x, double y) {
@@ -893,6 +1009,13 @@ namespace pdfpc {
          * them to the presentation controller
          */
         private bool on_motion(Gdk.EventMotion event) {
+            // We need to always update the pointer position, even if it is not
+            // shown. Otherwise, the pointer will appear at the old position
+            // when it is first shown and will jump around at the next mouse
+            // move.
+            this.device_to_normalized(event.x, event.y,
+                out pointer_x, out pointer_y);
+
             if (this.in_pointing_mode()) {
                 return on_move_pointer(event);
             } else if (this.in_drawing_mode()) {
@@ -959,6 +1082,10 @@ namespace pdfpc {
                 set_pen_pressure(pressure);
             }
 
+            // restart the pointer timeout timer
+            this.restart_pointer_timer();
+            this.pointer_hidden = false;
+
             double x, y;
             this.device_to_normalized(event.x, event.y, out x, out y);
             move_pen(x, y);
@@ -975,15 +1102,48 @@ namespace pdfpc {
                     this.pointer_timeout_id = 0;
                     this.pointer_hidden = true;
                     this.queue_pointer_surface_draws();
+                    this.queue_pen_surface_draws();
 
                     return false;
                 });
         }
 
-        private bool on_move_pointer(Gdk.EventMotion event) {
-            this.device_to_normalized(event.x, event.y,
-                out pointer_x, out pointer_y);
+        private void move_pointer(Variant? point) {
+            if (!this.in_pointing_mode()) {
+                return;
+            }
 
+            try {
+                GLib.Regex regex = new GLib.Regex("([^,]+),([^,]+)");
+                string[] parts = regex.split(point.get_string());
+                if (parts.length != 4) {
+                    return;
+                }
+                pointer_x += double.parse(parts[1]);
+                if (pointer_x > 1.0) {
+                    pointer_x = 1.0;
+                } else if (pointer_x < 0.0) {
+                    pointer_x = 0.0;
+                }
+                this.pointer_y += double.parse(parts[2]);
+                if (pointer_y > 1.0) {
+                    pointer_y = 1.0;
+                } else if (pointer_y < 0.0) {
+                    pointer_y = 0.0;
+                }
+            } catch (Error e) {
+                return;
+            }
+
+            // restart the pointer timeout timer
+            this.restart_pointer_timer();
+            this.pointer_hidden = false;
+
+            this.queue_pointer_surface_draws();
+            this.update_highlight(pointer_x, pointer_y);
+        }
+
+        private bool on_move_pointer(Gdk.EventMotion event) {
             // restart the pointer timeout timer
             this.restart_pointer_timer();
             this.pointer_hidden = false;
@@ -1104,6 +1264,10 @@ namespace pdfpc {
                 "Jump to the first overlay of the current slide");
             add_action("prevOverlay", this.previous_user_page,
                 "Jump back outside of the current overlay");
+            add_action("nextForced", this.next_page_forced,
+                "Go to the next slide, even if it is hidden");
+            add_action("prevForced", this.previous_page_forced,
+                "Go to the previous slide, even if it is hidden");
 
             add_action("goto", this.controllables_ask_goto_page,
                 "Ask for a page to jump to");
@@ -1131,6 +1295,8 @@ namespace pdfpc {
                 "Pause the timer");
             add_action("resetTimer", this.reset_timer,
                 "Reset the timer");
+            add_action("cycleTimerMode", this.cycle_timer,
+                "Cycle the timer view");
 
             add_action("windowed", this.toggle_windowed,
                 "Toggle the windowed state");
@@ -1149,6 +1315,8 @@ namespace pdfpc {
 
             add_action("overlay", this.add_overlay,
                 "Mark the current slide as an overlay slide");
+            add_action("toggleHidden", this.toggle_hidden,
+                "Toggle the hidden flag of the current slide");
             add_action("note", this.controllables_edit_note,
                 "Edit notes for the current slide");
             add_action("endSlide", this.set_end_user_slide,
@@ -1190,6 +1358,13 @@ namespace pdfpc {
             add_action("customize", this.customize_gui,
                 "Customize the GUI");
 
+            add_action_with_parameter("movePointer", GLib.VariantType.STRING,
+                this.move_pointer,
+                "Move pointer by vector", "(x,y)");
+#if REST
+            add_action("showQRcode", this.show_qrcode,
+                "Show QR code");
+#endif
             add_action("showHelp", this.show_help,
                 "Show a help screen");
 
@@ -1199,6 +1374,10 @@ namespace pdfpc {
                 "Reload the presentation");
             add_action("quit", this.quit,
                 "Exit pdfpc");
+            add_action("undo", this.undo,
+                "Undo the last paint action");
+            add_action("redo", this.redo,
+                "Redo the last paint action");
         }
 
         protected void add_action(string name, callback func,
@@ -1447,20 +1626,24 @@ namespace pdfpc {
         public bool scroll(Gdk.EventScroll scroll) {
             if (!this.ignore_mouse_events && !Options.disable_scrolling) {
                 switch (scroll.direction) {
-                    case Gdk.ScrollDirection.UP:
-                    case Gdk.ScrollDirection.LEFT:
-                        if ((scroll.state & Gdk.ModifierType.SHIFT_MASK) != 0)
-                            this.back10();
-                        else
-                            this.previous_page();
+                case Gdk.ScrollDirection.UP:
+                case Gdk.ScrollDirection.LEFT:
+                    if ((scroll.state & Gdk.ModifierType.SHIFT_MASK) != 0) {
+                        this.back10();
+                    } else {
+                        this.previous_page();
+                    }
                     break;
 
-                    case Gdk.ScrollDirection.DOWN:
-                    case Gdk.ScrollDirection.RIGHT:
-                        if ((scroll.state & Gdk.ModifierType.SHIFT_MASK) != 0)
-                            this.jump10();
-                        else
-                            this.next_page();
+                case Gdk.ScrollDirection.DOWN:
+                case Gdk.ScrollDirection.RIGHT:
+                    if ((scroll.state & Gdk.ModifierType.SHIFT_MASK) != 0) {
+                        this.jump10();
+                    } else {
+                        this.next_page();
+                    }
+                    break;
+                default:
                     break;
                 }
                 return true;
@@ -1498,13 +1681,6 @@ namespace pdfpc {
         public void set_ignore_input_events(bool v) {
             this.ignore_keyboard_events = v;
             this.ignore_mouse_events = v;
-        }
-
-        /**
-         * Get the timer
-         */
-        public TimerLabel getTimer() {
-            return this.timer;
         }
 
         private void readKeyBindings() {
@@ -1562,6 +1738,16 @@ namespace pdfpc {
         public void next_page() {
             var new_slide_number = this.current_slide_number + 1;
 
+            new_slide_number = metadata.nearest_nonhidden(new_slide_number);
+            this.switch_to_slide_number(new_slide_number);
+        }
+
+        /**
+         * Go to the next slide, ignoring the "hidden" attribute
+         */
+        public void next_page_forced() {
+            var new_slide_number = this.current_slide_number + 1;
+
             this.switch_to_slide_number(new_slide_number);
         }
 
@@ -1576,6 +1762,7 @@ namespace pdfpc {
                 new_slide_number = (int) this.n_slides - 1;
             }
 
+            new_slide_number = metadata.nearest_nonhidden(new_slide_number);
             this.switch_to_slide_number(new_slide_number);
         }
 
@@ -1611,6 +1798,16 @@ namespace pdfpc {
         public void previous_page() {
             var new_slide_number = this.current_slide_number - 1;
 
+            new_slide_number = metadata.nearest_nonhidden(new_slide_number, true);
+            this.switch_to_slide_number(new_slide_number);
+        }
+
+        /**
+         * Go to the previous slide, ignoring the "hidden" attribute
+         */
+        public void previous_page_forced() {
+            var new_slide_number = this.current_slide_number - 1;
+
             this.switch_to_slide_number(new_slide_number);
         }
 
@@ -1620,6 +1817,7 @@ namespace pdfpc {
         public void previous_user_page() {
             var new_slide_number = this.metadata.user_slide_to_real_slide(this.current_user_slide_number - 1);
 
+            new_slide_number = metadata.nearest_nonhidden(new_slide_number, true);
             this.switch_to_slide_number(new_slide_number);
         }
 
@@ -1663,8 +1861,7 @@ namespace pdfpc {
          * Go to the named slide
          */
         public void goto_string(Variant? page) {
-            this.running = true;
-            this.timer.start();
+            this.timer.run();
 
             int destination = int.parse(page.get_string()) - 1;
             this.goto_user_page(destination);
@@ -1682,6 +1879,7 @@ namespace pdfpc {
             var new_user_slide_number = int.min(this.current_user_slide_number + 10, this.user_n_slides - 1);
             var new_slide_number = this.metadata.user_slide_to_real_slide(new_user_slide_number);
 
+            new_slide_number = metadata.nearest_nonhidden(new_slide_number);
             this.switch_to_slide_number(new_slide_number);
         }
 
@@ -1692,6 +1890,7 @@ namespace pdfpc {
             var new_user_slide_number = int.max(this.current_user_slide_number - 10, 0);
             var new_slide_number = this.metadata.user_slide_to_real_slide(new_user_slide_number);
 
+            new_slide_number = metadata.nearest_nonhidden(new_slide_number, true);
             this.switch_to_slide_number(new_slide_number);
         }
 
@@ -1731,6 +1930,26 @@ namespace pdfpc {
             var new_slide_number = this.history_fwd.poll_head();
             this.history_bck.offer_head(this.current_slide_number);
             this.switch_to_slide_number(new_slide_number, true);
+        }
+
+        /**
+         * Undo the drawing
+         */
+        public void undo() {
+            if (in_drawing_mode()) {
+                this.pen_drawing.undo();
+                this.queue_pen_surface_draws();
+            }
+        }
+
+        /**
+         * Undo the drawing
+         */
+        public void redo() {
+            if (in_drawing_mode()) {
+                this.pen_drawing.redo();
+                this.queue_pen_surface_draws();
+            }
         }
 
         /**
@@ -1849,10 +2068,22 @@ namespace pdfpc {
         }
 
         /**
+         * Toggle the hidden flag of the current slide
+         */
+        protected void toggle_hidden() {
+            bool hidden = this.metadata.get_slide_hidden(current_slide_number);
+            int offset = this.metadata.set_slide_hidden(current_slide_number,
+                !hidden);
+            if (offset != 0) {
+                this.switch_to_slide_number(current_slide_number + offset);
+                this.controllables_update();
+            }
+        }
+
+        /**
          * Start the presentation (-> timer)
          */
         protected void start() {
-            this.running = true;
             this.timer.start();
             // start the autoadvancing on the initial page, if needed
             this.start_autoadvance_timer(this.current_slide_number);
@@ -1863,9 +2094,8 @@ namespace pdfpc {
          * Pause the timer
          */
         public void toggle_pause() {
-            this.running = !this.running;
-            this.timer.pause();
-            if (this.running) {
+            this.timer.toggle_pause();
+            if (this.is_running()) {
                 this.start_autoadvance_timer(this.current_slide_number);
             }
             this.controllables_update();
@@ -1874,8 +2104,15 @@ namespace pdfpc {
         /**
          * Reset the timer
          */
-        protected void reset_timer() {
+        public void reset_timer() {
             this.timer.reset();
+        }
+
+        /**
+         * Cycle the timer view (count up/count down/current time)
+         */
+        public void cycle_timer() {
+            this.timer.cycle_mode();
         }
 
         /**
@@ -2049,7 +2286,21 @@ namespace pdfpc {
                 this.presenter.show_help_window(true);
             }
         }
-
+#if REST
+        /**
+         * Show/hide QR code
+         */
+        public void show_qrcode() {
+            if (this.presenter != null && this.rest_server != null) {
+                this.presenter.show_qrcode_window(true);
+            }
+        }
+        public void hide_qrcode() {
+            if (this.presenter != null && this.rest_server != null) {
+                this.presenter.show_qrcode_window(false);
+            }
+        }
+#endif
         protected void exit_state() {
             if (this.faded_to_black) {
                 this.fade_to_black();

@@ -21,6 +21,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#if MDVIEW
 namespace pdfpc.View {
     public class MarkdownView : WebKit.WebView {
         WebKit.UserContentManager ucm;
@@ -30,9 +31,9 @@ namespace pdfpc.View {
 
             string css_path;
             if (Options.no_install) {
-                css_path = Path.build_filename(Paths.SOURCE_PATH, "rc/notes.css");
+                css_path = Path.build_filename(Paths.SOURCE_PATH, "css/notes.css");
             } else {
-                css_path = Path.build_filename(Paths.ICON_PATH, "notes.css");
+                css_path = Path.build_filename(Paths.SHARE_PATH, "css/notes.css");
             }
 
             try {
@@ -50,7 +51,6 @@ namespace pdfpc.View {
             }
 
             var mdsettings = this.get_settings();
-            mdsettings.enable_plugins = false;
             mdsettings.enable_javascript = false;
         }
 
@@ -61,26 +61,7 @@ namespace pdfpc.View {
         }
 
         public void render(string? text = "", bool plain_text = false) {
-            Markdown.DocumentFlags flags = Markdown.DocumentFlags.NO_EXT;
-
-            string html;
-            if (text != "" && plain_text) {
-                html = "<pre>%s</pre>".printf(text.replace("&", "&amp;")
-                                                  .replace("<", "&lt;")
-                                                  .replace(">", "&gt;"));
-            } else {
-                var md = new Markdown.Document.from_string(text.data, flags);
-                md.compile(flags);
-
-                md.document(out html);
-            }
-
-            // Form a minimal compliant Unicode HTML document
-            const string tmpl =
-                "<!doctype html>\n<html>\n"              +
-                "<head><meta charset='utf-8'></head>\n" +
-                "<body>\n%s\n</body>\n</html>\n";
-            var doc = tmpl.printf(html);
+            var doc = Renderer.MD.render(text, plain_text);
 
             // Actually render it
             this.load_html(doc, null);
@@ -95,3 +76,4 @@ namespace pdfpc.View {
         }
     }
 }
+#endif

@@ -78,6 +78,11 @@ namespace pdfpc {
             {"no-install", 'N', 0, 0,
                 ref Options.no_install,
                 "Test pdfpc without installation", null},
+#if REST
+            {"rest-port", 'p', 0, OptionArg.INT,
+                ref Options.rest_port,
+                "REST port number [8088]", null},
+#endif
             {"page", 'P', 0, OptionArg.INT,
                 ref Options.page_hnum,
                 "Go to page number N directly after startup", "N"},
@@ -102,6 +107,11 @@ namespace pdfpc {
             {"version", 'v', 0, 0,
                 ref Options.version,
                 "Output version information and exit", null},
+#if REST
+            {"enable-rest-server", 'V', 0, 0,
+                ref Options.enable_rest,
+                "Enable REST server", null},
+#endif
             {"windowed", 'w', 0, OptionArg.STRING,
                 ref Options.windowed,
                 "Run in the given windowed mode", "MODE"},
@@ -153,8 +163,8 @@ namespace pdfpc {
          * Print version string and copyright statement
          */
         private void print_version() {
-            GLib.print("pdfpc v4.5.1pre\n"
-                     + "Copyright (C) 2010-2020 see CONTRIBUTORS\n\n"
+            GLib.print("pdfpc v4.6\n"
+                     + "Copyright (C) 2010-2022 see CONTRIBUTORS\n\n"
                      + "License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\n"
                      + "This is free software: you are free to change and redistribute it.\n"
                      + "There is NO WARRANTY, to the extent permitted by law.\n");
@@ -174,9 +184,9 @@ namespace pdfpc {
 
             string distCssPath;
             if (Options.no_install) {
-                distCssPath = Path.build_filename(Paths.SOURCE_PATH, "rc/pdfpc.css");
+                distCssPath = Path.build_filename(Paths.SOURCE_PATH, "css/pdfpc.css");
             } else {
-                distCssPath = Path.build_filename(Paths.ICON_PATH, "pdfpc.css");
+                distCssPath = Path.build_filename(Paths.SHARE_PATH, "css/pdfpc.css");
             }
             var legacyUserCssPath = Path.build_filename(GLib.Environment.get_user_config_dir(), "pdfpc.css");
             var userCssPath = Path.build_filename(GLib.Environment.get_user_config_dir(), "pdfpc", "pdfpc.css");
@@ -293,9 +303,9 @@ namespace pdfpc {
             bool presentation_windowed = false;
             switch (Options.windowed) {
             case "none":
-            case null:
                 break;
             case "presenter":
+            case null:
                 presenter_windowed = true;
                 break;
             case "presentation":
@@ -421,23 +431,21 @@ namespace pdfpc {
                     new Window.Presenter(this.controller,
                         presenter_monitor, presenter_windowed);
 
+                this.controller.presenter.show.connect(() => {
+                    this.controller.presenter.update();
+                });
+                this.controller.presenter.show_all();
             }
             if (!single_screen_mode || Options.display_switch) {
                 this.controller.presentation =
                     new Window.Presentation(this.controller,
                         presentation_monitor, presentation_windowed,
                         width, height);
-            }
 
-            // The windows are always displayed at last to be sure all caches
-            // have been created at this point.
-            if (this.controller.presentation != null) {
+                this.controller.presentation.show.connect(() => {
+                    this.controller.presentation.update();
+                });
                 this.controller.presentation.show_all();
-                this.controller.presentation.update();
-            }
-            if (this.controller.presenter != null) {
-                this.controller.presenter.show_all();
-                this.controller.presenter.update();
             }
 
             if (Options.page_hnum >= 1 &&
@@ -474,8 +482,10 @@ namespace pdfpc {
                                     new Window.Presentation(controller,
                                         i, presentation_windowed,
                                         width, height);
+                                controller.presentation.show.connect(() => {
+                                    controller.presentation.update();
+                                });
                                 controller.presentation.show_all();
-                                controller.presentation.update();
                                 break;
                             }
                         }

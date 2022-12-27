@@ -162,17 +162,18 @@ namespace pdfpc.Window {
             this.overlay_layout.add_overlay(this.pen_drawing_surface);
             this.overlay_layout.add_overlay(this.pointer_drawing_surface);
 
+            this.pointer_drawing_surface.no_show_all = true;
+            this.pen_drawing_surface.no_show_all = true;
+
             this.video_surface.realize.connect(() => {
                 this.set_widget_event_pass_through(this.video_surface, true);
             });
             this.pen_drawing_surface.realize.connect(() => {
-                this.enable_pen(false);
                 this.pen_drawing_surface.get_window().set_pass_through(true);
                 this.set_widget_event_pass_through(this.pen_drawing_surface,
                     true);
             });
             this.pointer_drawing_surface.realize.connect(() => {
-                this.enable_pointer(false);
                 this.pointer_drawing_surface.get_window().set_pass_through(true);
                 this.set_widget_event_pass_through(this.pointer_drawing_surface,
                     true);
@@ -351,7 +352,8 @@ namespace pdfpc.Window {
                 context.set_source_surface(drawing_surface, 0, 0);
                 context.paint();
                 context.set_matrix(old_xform);
-                if (this.is_presenter && c.in_drawing_mode()) {
+                if (this.is_presenter && c.in_drawing_mode() &&
+                    !c.pointer_hidden) {
                     double width_adjustment = (double) a.width / base_width;
                     context.set_operator(Cairo.Operator.OVER);
                     context.set_line_width(2.0);

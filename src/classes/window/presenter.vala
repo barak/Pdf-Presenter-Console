@@ -68,8 +68,9 @@ namespace pdfpc.Window {
         protected Gtk.Stack notes_stack;
         protected Gtk.TextView notes_editor;
         protected View.Pdf notes_view;
+#if MDVIEW
         protected View.MarkdownView mdview;
-
+#endif
         protected Gtk.Paned slide_views;
         protected Gtk.Paned current_view_and_stricts;
         protected Gtk.Paned next_view_and_notes;
@@ -77,7 +78,7 @@ namespace pdfpc.Window {
         /**
          * Timer for the presenation
          */
-        protected TimerLabel? timer;
+        protected Gtk.Label timer_label;
 
         /**
          * Slide progress label ( eg. "23/42" )
@@ -467,7 +468,7 @@ namespace pdfpc.Window {
          * Update (hide/show) status icons
          **/
         private void update_status_icons() {
-            if (this.timer.is_paused()) {
+            if (this.controller.is_paused()) {
                 this.pause_icon.show();
             } else {
                 this.pause_icon.hide();
@@ -611,25 +612,58 @@ namespace pdfpc.Window {
             frame = new Gtk.AspectFrame(null, 0.5f, 0.0f, page_ratio, false);
             frame.add(this.notes_view);
 
-            // The Markdown rendering widget
-            this.mdview = new View.MarkdownView();
-
             // The full notes stack
             this.notes_stack = new Gtk.Stack();
             this.notes_stack.add_named(notes_sw, "editor");
             this.notes_stack.add_named(frame, "view");
+#if MDVIEW
+            // The Markdown rendering widget
+            this.mdview = new View.MarkdownView();
             this.notes_stack.add_named(this.mdview, "mdview");
+#endif
             this.notes_stack.homogeneous = true;
 
             var meta_font_size = this.metadata.get_font_size();
             this.apply_font_size(meta_font_size);
 
             // The countdown timer is centered in the 90% bottom part of the screen
-            this.timer = this.controller.getTimer();
-            this.timer.name = "timer";
-            this.timer.get_style_context().add_class("bottomText");
-            this.timer.set_justify(Gtk.Justification.CENTER);
+            this.timer_label = new Gtk.Label("");
+            this.timer_label.name = "timer";
+            this.timer_label.get_style_context().add_class("bottomText");
+            this.timer_label.set_justify(Gtk.Justification.CENTER);
+            this.controller.timer_change.connect((str) => {
+                    var context = this.get_style_context();
 
+                    // Clear any previously assigned class
+                    context.remove_class("pretalk");
+                    context.remove_class("too-fast");
+                    context.remove_class("too-slow");
+                    context.remove_class("last-minutes");
+                    context.remove_class("overtime");
+
+                    switch (this.controller.progress_status) {
+                    case PresentationController.ProgressStatus.PreTalk:
+                        context.add_class("pretalk");
+                        break;
+                    case PresentationController.ProgressStatus.Fast:
+                        context.add_class("too-fast");
+                        break;
+                    case PresentationController.ProgressStatus.Slow:
+                        context.add_class("too-slow");
+                        break;
+                    case PresentationController.ProgressStatus.LastMinutes:
+                        context.add_class("last-minutes");
+                        break;
+                    case PresentationController.ProgressStatus.Overtime:
+                        context.add_class("overtime");
+                        break;
+                    default:
+                        break;
+                    }
+
+                    this.timer_label.set_label(str);
+                });
+            this.controller.reset_timer();
 
             // The slide counter is centered in the 90% bottom part of the screen
             this.slide_progress = new Gtk.Entry();
@@ -717,21 +751,38 @@ namespace pdfpc.Window {
             this.slide_views.pack2(this.next_view_and_notes, true, true);
 
             var help_sw = create_help_window();
-
+#if REST
+            var qrcode_da = new QRCode(this.controller, 0.5*this.window_h);
+            qrcode_da.key_press_event.connect((event) => {
+                    // Close this window on some reasonable keystrokes
+                    switch (event.keyval) {
+                    case Gdk.Key.Escape:
+                    case Gdk.Key.Return:
+                    case Gdk.Key.q:
+                        this.show_qrcode_window(false);
+                        return true;
+                    default:
+                        return false;
+                    }
+                });
+#endif
             this.slide_stack = new Gtk.Stack();
             this.slide_stack.add_named(this.slide_views, "slides");
             this.slide_stack.add_named(this.overview, "overview");
             this.slide_stack.add_named(help_sw, "help");
+#if REST
+            this.slide_stack.add_named(qrcode_da, "qrcode");
+#endif
             this.slide_stack.homogeneous = true;
 
             var bottom_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
             bottom_row.homogeneous = true;
 
-            this.timer.halign = Gtk.Align.CENTER;
-            this.timer.valign = Gtk.Align.END;
+            this.timer_label.halign = Gtk.Align.CENTER;
+            this.timer_label.valign = Gtk.Align.END;
 
             bottom_row.pack_start(this.status);
-            bottom_row.pack_start(this.timer);
+            bottom_row.pack_start(this.timer_label);
             bottom_row.pack_end(this.slide_progress, false);
 
             Gtk.Grid full_layout = new Gtk.Grid();
@@ -904,60 +955,21 @@ namespace pdfpc.Window {
         }
 
        /**
-         * Load an (SVG) icon, replacing a substring in it in special cases
+         * Load an icon (essentially, a quadratic image)
          */
-        protected Gtk.Image load_icon(string filename, int icon_height) {
-            // attempt to load from a local path (if the user hasn't installed)
-            // if that fails, attempt to load from the global path
-            string load_icon_path;
-            if (Options.no_install) {
-                load_icon_path = Path.build_filename(Paths.SOURCE_PATH, "icons",
-                    filename);
-            } else {
-                load_icon_path = Path.build_filename(Paths.ICON_PATH, filename);
-            }
-            File icon_file = File.new_for_path(load_icon_path);
-
+        protected Gtk.Image load_icon(string filename, int size) {
             Gtk.Image icon;
-            try {
-                int width = icon_height;
-                int height = icon_height;
-
-                if (!Pdfpc.is_Wayland_backend() && !Pdfpc.is_Quartz_backend()) {
-                    width *= this.gdk_scale;
-                    height *= this.gdk_scale;
-                }
-
-                Gdk.Pixbuf pixbuf;
-                if (filename == "highlight.svg") {
-                    uint8[] contents;
-                    string etag_out;
-                    icon_file.load_contents(null, out contents, out etag_out);
-
-                    string buf = (string) contents;
-                    buf = buf.replace("pointer_color", Options.pointer_color);
-
-                    MemoryInputStream stream =
-                        new MemoryInputStream.from_data(buf.data);
-
-                    pixbuf = new Gdk.Pixbuf.from_stream_at_scale(stream,
-                        width, height, true);
-                } else {
-                    pixbuf = new Gdk.Pixbuf.from_file_at_scale(load_icon_path,
-                        width, height, true);
-                }
-
-                Cairo.Surface surface =
-                    Gdk.cairo_surface_create_from_pixbuf(pixbuf, 0, null);
-
+            if (!Pdfpc.is_Wayland_backend() && !Pdfpc.is_Quartz_backend()) {
+                size *= this.gdk_scale;
+            }
+            var surface = Renderer.Image.render(filename, size, size);
+            if (surface != null) {
                 icon = new Gtk.Image.from_surface(surface);
-                icon.no_show_all = true;
-            } catch (Error e) {
-                GLib.printerr("Warning: Could not load icon %s (%s)\n",
-                    load_icon_path, e.message);
+            } else {
                 icon = new Gtk.Image.from_icon_name("image-missing",
                     Gtk.IconSize.LARGE_TOOLBAR);
             }
+            icon.no_show_all = true;
             return icon;
         }
 
@@ -1033,31 +1045,41 @@ namespace pdfpc.Window {
             this.current_view.display(current_slide_number);
 
             var next_view_user_slide = current_user_slide_number;
-            if (!Options.final_slide_overlay ||
-                this.metadata.is_user_slide(current_slide_number)) {
+            bool show_final_slide_of_current_overlay =
+                Options.final_slide_overlay &&
+                !this.metadata.is_user_slide(current_slide_number);
+            if (!show_final_slide_of_current_overlay) {
                 next_view_user_slide++;
             }
 
-            var next_slide_number =
-                this.metadata.user_slide_to_real_slide(next_view_user_slide);
-            this.next_view.disabled = (next_slide_number < 0);
-            this.next_view.display(next_slide_number);
+            var view_slide_number =
+                this.metadata.user_slide_to_real_slide(next_view_user_slide,
+                show_final_slide_of_current_overlay ||
+                !Options.next_slide_first_overlay);
+            view_slide_number = metadata.nearest_nonhidden(view_slide_number);
+            this.next_view.disabled = (view_slide_number < 0);
+            this.next_view.display(view_slide_number);
 
-            next_slide_number =
+            view_slide_number =
                 this.metadata.next_in_overlay(current_slide_number);
-            this.strict_next_view.disabled = (next_slide_number < 0);
-            this.strict_next_view.display(next_slide_number);
+            view_slide_number = metadata.nearest_nonhidden(view_slide_number);
+            this.strict_next_view.disabled = (view_slide_number < 0);
+            this.strict_next_view.display(view_slide_number);
 
-            var prev_slide_number =
+            view_slide_number =
                 this.metadata.prev_in_overlay(current_slide_number);
-            this.strict_prev_view.disabled = (prev_slide_number < 0);
-            this.strict_prev_view.display(prev_slide_number);
+            view_slide_number = metadata.nearest_nonhidden(view_slide_number,
+                true);
+            this.strict_prev_view.disabled = (view_slide_number < 0);
+            this.strict_prev_view.display(view_slide_number);
 
             if (this.metadata.has_beamer_notes) {
                 this.notes_stack.set_visible_child_name("view");
                 this.notes_view.display(current_slide_number);
             } else {
+#if MDVIEW
                 this.notes_stack.set_visible_child_name("mdview");
+#endif
                 this.update_note();
             }
 
@@ -1161,9 +1183,11 @@ namespace pdfpc.Window {
                 this.metadata.set_note(this_note,
                     this.controller.current_slide_number);
                 this.controller.set_ignore_input_events(false);
+#if MDVIEW
                 this.mdview.render(this_note,
                     this.metadata.get_disable_markdown());
                 this.notes_stack.set_visible_child_name("mdview");
+#endif
                 return true;
             } else {
                 return false;
@@ -1177,9 +1201,10 @@ namespace pdfpc.Window {
             string this_note = this.metadata.get_note(
                 this.controller.current_slide_number);
             this.notes_editor.buffer.text = this_note;
-
+#if MDVIEW
             // render the note
             this.mdview.render(this_note, this.metadata.get_disable_markdown());
+#endif
         }
 
         public void show_overview() {
@@ -1233,10 +1258,11 @@ namespace pdfpc.Window {
             } catch (Error e) {
                 GLib.printerr("Warning: failed to set CSS for notes.\n");
             }
-
+#if MDVIEW
             // 20pt is set in notes.css
             var mdview_zoom = size/20.0;
             this.mdview.apply_zoom(mdview_zoom);
+#endif
         }
 
         private void on_zoom(PresentationController.ScaledRectangle? rect) {
@@ -1248,6 +1274,17 @@ namespace pdfpc.Window {
             if (onoff) {
                 this.slide_stack.set_visible_child_name("help");
                 this.slide_stack.get_child_by_name("help").grab_focus();
+                this.controller.set_ignore_input_events(true);
+            } else {
+                this.slide_stack.set_visible_child_name("slides");
+                this.controller.set_ignore_input_events(false);
+            }
+        }
+
+        public void show_qrcode_window(bool onoff) {
+            if (onoff) {
+                this.slide_stack.set_visible_child_name("qrcode");
+                this.slide_stack.get_child_by_name("qrcode").grab_focus();
                 this.controller.set_ignore_input_events(true);
             } else {
                 this.slide_stack.set_visible_child_name("slides");

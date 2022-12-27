@@ -272,6 +272,9 @@ namespace pdfpc {
                 case "next-height":
                     Options.next_height = int.parse(fields[2]);
                     break;
+                case "next-slide-first-overlay":
+                    Options.next_slide_first_overlay = bool.parse(fields[2]);
+                    break;
                 case "overview-min-size":
                     Options.min_overview_width = int.parse(fields[2]);
                     break;
@@ -291,11 +294,34 @@ namespace pdfpc {
                     Options.prerender_slides = int.parse(fields[2]);
                     break;
                 case "presentation-screen":
-                    Options.presentation_screen = fields[2];
+                    // Don't override command-line setting
+                    if (Options.presentation_screen == null) {
+                        Options.presentation_screen = fields[2];
+                    }
                     break;
                 case "presenter-screen":
-                    Options.presenter_screen = fields[2];
+                    // Don't override command-line setting
+                    if (Options.presenter_screen == null) {
+                        Options.presenter_screen = fields[2];
+                    }
                     break;
+#if REST
+                case "rest-https":
+                    Options.rest_https = bool.parse(fields[2]);
+                    break;
+                case "rest-port":
+                    // don't override command-line setting
+                    if (Options.rest_port == 0) {
+                        Options.rest_port = int.parse(fields[2]);
+                    }
+                    break;
+                case "rest-passwd":
+                    Options.rest_passwd = fields[2];
+                    break;
+                case "rest-static-root":
+                    Options.rest_static_root = fields[2];
+                    break;
+#endif
                 case "spotlight-opacity":
                     Options.spotlight_opacity = int.parse(fields[2]);
                     break;

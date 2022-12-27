@@ -25,6 +25,10 @@ bind S+Up               firstOverlay
 bind S+Right            next10
 bind S+Left             prev10
 
+# Incremental movement ignoring the "hidden" attribute
+bind S+n                nextForced
+bind S+p                prevForced
+
 # Jumps
 bind Home               gotoFirst
 bind End                gotoLast
@@ -40,6 +44,10 @@ bind S+space            histFwd
 bind S+End              nextUnseen
 bind S+Home             prevSeen
 
+# Undo and redo
+bind C+z                undo
+bind C+y                redo
+
 # The overview mode
 bind Tab                overview
 
@@ -49,7 +57,7 @@ bind t                  toggleToolbox
 # Exit
 bind C+q                quit
 
-# Exit
+# Reload
 bind C+r                reload
 
 # Presenter state
@@ -65,11 +73,13 @@ bind Escape             exitState
 bind s                  start
 bind p                  pause
 bind C+t                resetTimer
+bind S+t                cycleTimerMode
 
 # Presentation editing
 bind C+n                note
 bind C+o                overlay
 bind C+e                endSlide
+bind C+h                toggleHidden
 
 # Annotation modes
 bind 1                  switchMode normal
@@ -106,6 +116,9 @@ bind d                  toggleDrawings
 
 # Script execution
 bind S+x                executeScript
+
+# Show QR code
+bind Q                  showQRcode
 
 # Short help
 bind question           showHelp

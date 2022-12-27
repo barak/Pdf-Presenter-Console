@@ -14,7 +14,9 @@ install(FILES
     settings.svg
     linewidth.svg
     spotlight.svg
+    play_cur.svg
+    pause_cur.svg
 DESTINATION
-    share/pixmaps/pdfpc
+    share/pdfpc/icons
 )
 
