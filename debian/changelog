@@ -2,8 +2,9 @@ pdf-presenter-console (4.6.0-1) unstable; urgency=medium
 
   * Update standards version to 4.6.2, no changes needed.
   * New upstream release
+  * Build dependency on libqrencode-dev, and follow README.rst
 
- -- Barak A. Pearlmutter <bap@debian.org>  Tue, 27 Dec 2022 21:01:13 +0000
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 27 Dec 2022 21:52:36 +0000
 
 pdf-presenter-console (4.5.0-3) unstable; urgency=medium
 
