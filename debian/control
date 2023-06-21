@@ -12,8 +12,6 @@ Build-Depends: debhelper-compat (= 13),
 		libjson-glib-dev,
 		libmarkdown2-dev,
 		libwebkit2gtk-4.1-dev,
-		libsoup2.4-dev,
-		libqrencode-dev,
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 Homepage: https://pdfpc.github.io
