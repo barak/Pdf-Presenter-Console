@@ -1,3 +1,10 @@
+pdf-presenter-console (4.6.0-3) unstable; urgency=medium
+
+  * Cherrypick upstream pull req https://github.com/pdfpc/pdfpc/pull/687/files,
+    fixes unsupported generic type FTBFS by boxing it (closes: #1042165)
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Thu, 27 Jul 2023 11:05:05 +0100
+
 pdf-presenter-console (4.6.0-2) unstable; urgency=medium
 
   * Drop obsolete Build-Depend on libsoup2.4 & libqrencode-dev
