@@ -2,9 +2,8 @@ find_package(PkgConfig)
 pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
 pkg_check_modules(GIO REQUIRED gio-2.0)
 pkg_check_modules(GEE REQUIRED gee-0.8)
-pkg_check_modules(POPPLER REQUIRED poppler-glib>=0.22)
+pkg_check_modules(POPPLER REQUIRED poppler-glib>=0.80)
 pkg_check_modules(GTK REQUIRED gtk+-3.0>=3.22)
-pkg_check_modules(MARKDOWN REQUIRED libmarkdown)
 pkg_check_modules(JSON REQUIRED json-glib-1.0)
 list (FIND GTK_STATIC_LIBRARIES "X11" _index)
 if (${_index} GREATER -1)
@@ -29,10 +28,13 @@ if (MOVIES)
     )
 endif ()
 
+if (MDVIEW OR REST)
+    pkg_check_modules(MARKDOWN REQUIRED libmarkdown)
+endif ()
+
 if (MDVIEW)
     pkg_check_modules(WEBKIT REQUIRED webkit2gtk-4.0)
     set(MDVIEW_PACKAGES webkit2gtk-4.0)
-    set(EXTRA_VALA_OPTIONS ${EXTRA_VALA_OPTIONS} -D MDVIEW)
 endif ()
 
 if (REST)
@@ -47,10 +49,6 @@ if (REST)
         set(WSOCK32_LIB wsock32)
     endif ()
 endif ()
-
-if ("${POPPLER_VERSION}" VERSION_GREATER_EQUAL 0.80 AND "${VALA_VERSION}" VERSION_GREATER 0.48.0)
-    set(EXTRA_VALA_OPTIONS ${EXTRA_VALA_OPTIONS} -D NEW_POPPLER)
-endif()
 
 include_directories(
     ${GOBJECT_INCLUDE_DIRS}
@@ -95,11 +93,16 @@ if(${WITH_X11})
     set(ADDITIONAL_LIBS ${X11_LIBRARIES})
 endif()
 
+file (STRINGS pdfpc.version PDFPC_RELEASE_DATA)
+list (GET PDFPC_RELEASE_DATA 0 PDFPC_VERSION_STRING)
+list (GET PDFPC_RELEASE_DATA 1 PDFPC_VERSION_YEAR)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/release.vala.in ${CMAKE_CURRENT_SOURCE_DIR}/release.vala)
+
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/paths.in ${CMAKE_CURRENT_BINARY_DIR}/paths.vala)
 
 file (GLOB_RECURSE C_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.c)
 file (GLOB_RECURSE VALA_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.vala)
-list(REMOVE_ITEM VALA_SRC paths.vala)
+
 if (MOVIES)
     set(EXTRA_VALA_OPTIONS ${EXTRA_VALA_OPTIONS} -D MOVIES)
 else ()
@@ -110,6 +113,14 @@ if (REST)
 else ()
     LIST(REMOVE_ITEM VALA_SRC classes/rest_server.vala)
     LIST(REMOVE_ITEM VALA_SRC classes/window/qrcode.vala)
+endif ()
+if (MDVIEW)
+    set(EXTRA_VALA_OPTIONS ${EXTRA_VALA_OPTIONS} -D MDVIEW)
+else ()
+    LIST(REMOVE_ITEM VALA_SRC classes/view/markdown.vala)
+endif ()
+if (NOT MARKDOWN_FOUND)
+    LIST(REMOVE_ITEM VALA_SRC classes/renderer/markdown.vala)
 endif ()
 
 # Check for some compiler flags to suppress excessive Vala-triggered warnings
@@ -136,7 +147,6 @@ endif()
 vala_precompile(VALA_C
     ${VALA_SRC}
 PACKAGES
-    webkit2gtk-4.0
     json-glib-1.0
     gio-2.0
     gee-0.8

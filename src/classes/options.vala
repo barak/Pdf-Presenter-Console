@@ -37,7 +37,7 @@ namespace pdfpc {
         }
 
         /**
-         * Commandline option enabeling the execution of external
+         * Commandline option enabling the execution of external
          * scripts. Only the scripts explicitly given on the
          * commandline can be executed.
          */
@@ -108,6 +108,11 @@ namespace pdfpc {
         public static int prerender_slides = 2;
 
         /**
+         * Time to wait before hiding cursor on the main slide view [s]
+         */
+        public static int cursor_timeout = 2;
+
+        /**
          * Config option to enable a workaround for fullscreen window placement
          * (needed for some WM's, e.g., fvwm)
          */
@@ -151,20 +156,24 @@ namespace pdfpc {
         public static uint last_minutes = 0;
 
         /**
-         * Commandline option providing the size of the current slide in
-         * the presenter window
+         * Height of the status area (timer, progress, icons) in the presenter
+         * (% of the window height), leaving (100 - status_height)% for the
+         * "main" area
+         */
+        public static uint status_height = 10;
+
+        /**
+         * Width of the current slide in the presenter (% of the window width)
          */
         public static uint current_size = 60;
 
         /**
-         * Commandline option providing the height of the current slide in
-         * the presenter window
+         * Height of the current slide in the presenter (% of the "main")
          **/
         public static uint current_height = 80;
 
         /**
-         * Commandline option providing the maximum height of the next slide
-         * in the presenter window
+         * Height of the next slide in the presenter (% of the "main")
          **/
         public static uint next_height = 70;
 
@@ -206,19 +215,9 @@ namespace pdfpc {
         public static bool black_on_end = false;
 
         /**
-         * Show the actions supported in the config file(s)
-         */
-        public static bool list_actions = false;
-
-        /**
          * Show the defined action bindings
          */
         public static bool list_bindings = false;
-
-        /**
-         * Show the available monitors(s)
-         */
-        public static bool list_monitors = false;
 
         /**
          * Commandline option to choose which format to parse notes in
@@ -229,6 +228,11 @@ namespace pdfpc {
          * Position of notes on slides
          */
         public static string? notes_position = null;
+
+        /**
+         * Whether the presentation window is always interactive
+         */
+        public static bool presentation_interactive = true;
 
         /**
          * Screen to be used for the presentation (output name)
@@ -276,18 +280,7 @@ namespace pdfpc {
         public static bool auto_srt = false;
 
         /**
-         * Page number which should be displayed after startup;
-         * "h" stands for human (numerated from 1, not 0)
-         */
-        public static int page_hnum = 1;
-
-        /**
-         * Flag if the version string should be printed on startup
-         */
-        public static bool version = false;
-
-        /**
-         * Location of specific, user-chosen pdfpcrc file
+         * Location of a non-default, user-chosen .pdfpc file
          */
         public static string? pdfpc_location = null;
 
@@ -358,8 +351,9 @@ namespace pdfpc {
 
             public void setActionArg(string? actionArg) throws ConfigFileError {
                 if (this.actionName != "setPenColor" &&
-                    this.actionName != "switchMode") {
-                    throw new ConfigFileError.INVALID_BIND("Only 'setPenColor' accepts an action argument");
+                    this.actionName != "switchMode"  &&
+                    this.actionName != "windowed") {
+                    throw new ConfigFileError.INVALID_BIND("No argument is expected");
                 }
 
                 this._actionArg = actionArg;

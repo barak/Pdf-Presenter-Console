@@ -168,46 +168,58 @@ namespace pdfpc {
 
         public void readConfig(string fname) {
             var file = File.new_for_path(fname);
-            uint8[] raw_datau8;
             try {
-                var splitRegex = new Regex("\\s\\s*");
-                var commentRegex = new Regex("^\\s*#.*$");
+                uint8[] raw_datau8;
                 file.load_contents(null, out raw_datau8, null);
                 string[] lines = ((string) raw_datau8).split("\n");
-                for (int i=0; i<lines.length; ++i) {
-                    string uncommentedLine = commentRegex.replace(lines[i], -1, 0, "");
-                    string[] fields = splitRegex.split(uncommentedLine);
-                    if (fields.length == 0)
-                        continue;
-                    switch(fields[0]) {
-                        case "bind":
-                            this.bindKey(uncommentedLine, fields);
-                            break;
-                        case "unbind":
-                            this.unbindKey(uncommentedLine, fields);
-                            break;
-                        case "unbind_all":
-                            this.unbindKeyAll();
-                            break;
-                        case "mouse":
-                            this.bindMouse(uncommentedLine, fields);
-                            break;
-                        case "unmouse":
-                            this.unbindMouse(uncommentedLine, fields);
-                            break;
-                        case "unmouse_all":
-                            this.unbindMouseAll();
-                            break;
-                        case "option":
-                            this.readOption(uncommentedLine, fields);
-                            break;
-                        default:
-                            GLib.printerr("Warning: Invalid configuration statement \"%s\"\n",
-                                uncommentedLine);
-                            break;
-                    }
+                for (int i = 0; i < lines.length; ++i) {
+                    this.parseStatement(lines[i]);
                 }
             } catch (Error e) {
+            }
+        }
+
+        public void parseStatement(string line) {
+            // Strip white spaces
+            string statement = line.strip();
+
+            // Ignore comments
+            if (statement[0] == '#') {
+                return;
+            }
+
+            string[] fields = GLib.Regex.split_simple("[ \t]+", statement);
+
+            if (fields.length == 0) {
+                return;
+            }
+
+            switch(fields[0]) {
+            case "bind":
+                this.bindKey(statement, fields);
+                break;
+            case "unbind":
+                this.unbindKey(statement, fields);
+                break;
+            case "unbind_all":
+                this.unbindKeyAll();
+                break;
+            case "mouse":
+                this.bindMouse(statement, fields);
+                break;
+            case "unmouse":
+                this.unbindMouse(statement, fields);
+                break;
+            case "unmouse_all":
+                this.unbindMouseAll();
+                break;
+            case "option":
+                this.readOption(statement, fields);
+                break;
+            default:
+                GLib.printerr("Warning: Invalid configuration statement \"%s\"\n",
+                    statement);
+                break;
             }
         }
 
@@ -244,6 +256,9 @@ namespace pdfpc {
                     break;
                 case "current-size":
                     Options.current_size = int.parse(fields[2]);
+                    break;
+                case "cursor-timeout":
+                    Options.cursor_timeout = int.parse(fields[2]);
                     break;
                 case "disable-input-autodetection":
                     Options.disable_input_autodetection = bool.parse(fields[2]);
@@ -293,6 +308,9 @@ namespace pdfpc {
                 case "prerender-slides":
                     Options.prerender_slides = int.parse(fields[2]);
                     break;
+                case "presentation-interactive":
+                    Options.presentation_interactive = bool.parse(fields[2]);
+                    break;
                 case "presentation-screen":
                     // Don't override command-line setting
                     if (Options.presentation_screen == null) {
@@ -327,6 +345,9 @@ namespace pdfpc {
                     break;
                 case "spotlight-size":
                     Options.spotlight_size = int.parse(fields[2]);
+                    break;
+                case "status-height":
+                    Options.status_height = int.parse(fields[2]);
                     break;
                 case "switch-screens":
                     bool switch_screens = bool.parse(fields[2]);

@@ -39,7 +39,7 @@ namespace pdfpc {
     public class VideoConf : Object {
         public int display_num { get; set; }
         public Gdk.Rectangle rect { get; set; }
-        public Window.Fullscreen window { get; set; }
+        public Window.ControllableWindow window { get; set; }
     }
 
     protected struct PlaybackOptions {
@@ -381,13 +381,11 @@ namespace pdfpc {
                 options.poster = movie.need_poster();
                 options.noprogress = !movie.show_controls();
                 options.loop = movie.get_play_mode() == Poppler.MoviePlayMode.REPEAT;
-                #if NEW_POPPLER
                 options.starttime = (int) (movie.get_start()/1000000000L);
                 int duration = (int) (movie.get_duration()/1000000000L);
                 if (duration > 0) {
                     options.stoptime = options.starttime + duration;
                 }
-                #endif
                 break;
 
             default:
@@ -737,7 +735,7 @@ namespace pdfpc {
             Gee.List<VideoConf> video_confs = new Gee.ArrayList<VideoConf>();
             while (true) {
                 Gdk.Rectangle rect;
-                Window.Fullscreen window;
+                Window.ControllableWindow window;
                 this.controller.overlay_pos(n, this.area, out rect, out window);
                 if (window == null) {
                     break;
@@ -768,7 +766,7 @@ namespace pdfpc {
                 Gst.Element queue = Gst.ElementFactory.make("queue", @"queue$n");
                 bin.add_many(queue, sink);
                 tee.link(queue);
-                if (conf.window.is_presenter) {
+                if (conf.window.interactive) {
                     Gst.Element ad_element = this.add_video_control(queue, bin,
                         conf.rect);
                     ad_element.link(sink);
@@ -779,7 +777,7 @@ namespace pdfpc {
 
                 // mark the video widget on the "frozen" presentation screen
                 // with a custom flag
-                if (!conf.window.is_presenter && controller.frozen) {
+                if (!conf.window.interactive && controller.frozen) {
                     video_area.set_data("pdfpc_frozen", true);
                 }
 
@@ -787,14 +785,14 @@ namespace pdfpc {
                 video_surface.add_video(video_area, conf.rect);
                 video_surface.size_allocate.connect((a) => {
                         Gdk.Rectangle rect;
-                        Window.Fullscreen window;
+                        Window.ControllableWindow window;
 
                         this.controller.overlay_pos(conf.display_num,
                             this.area, out rect, out window);
 
                         // Update the rectangle
                         conf.rect = rect;
-                        if (window.is_presenter) {
+                        if (window.interactive) {
                             this.rect = rect;
                             this.scalex = (double) this.video_w/rect.width;
                             this.scaley = (double) this.video_h/rect.height;

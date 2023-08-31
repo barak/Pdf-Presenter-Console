@@ -159,15 +159,25 @@ namespace pdfpc {
             }
 
             int last_slide;
-            if (this.user_slides) {
+            // negative number means prerender all
+            if (Options.prerender_slides < 0) {
+                last_slide = this.n_slides - 1;
+            }
+            else if (this.user_slides) {
                 var user_slide = metadata.real_slide_to_user_slide(this.current_slide_number);
                 var last_user_slide = user_slide + Options.prerender_slides;
-                last_slide = metadata.user_slide_to_real_slide(last_user_slide, true);
+                if (last_user_slide < metadata.get_user_slide_count()) {
+                    last_slide =
+                        metadata.user_slide_to_real_slide(last_user_slide, true);
+                } else {
+                    last_slide = this.n_slides - 1;
+                }
             } else {
-                last_slide = this.current_slide_number + Options.prerender_slides;
-            }
-            if (last_slide >= this.n_slides) {
-                last_slide = this.n_slides - 1;
+                last_slide = this.current_slide_number +
+                    Options.prerender_slides;
+                if (last_slide >= this.n_slides) {
+                    last_slide = this.n_slides - 1;
+                }
             }
 
             int width, height;
@@ -231,12 +241,12 @@ namespace pdfpc {
         }
 
         /**
-         * Create a new Pdf view from a Fullscreen window instance
+         * Create a new Pdf view from a ControllableWindow instance
          *
          * This is a convenience constructor which automatically creates a full
          * metadata and rendering chain to be used with the pdf view.
          */
-        public Pdf.from_fullscreen(Window.Fullscreen window,
+        public Pdf.from_controllable_window(Window.ControllableWindow window,
             bool notes_area, bool clickable_links, bool user_slides=false) {
             var controller = window.controller;
             var metadata = controller.metadata;
