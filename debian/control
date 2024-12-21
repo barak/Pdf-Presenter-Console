@@ -12,7 +12,7 @@ Build-Depends: debhelper-compat (= 13),
 		libjson-glib-dev,
 		libmarkdown2-dev,
 		libwebkit2gtk-4.1-dev,
-Standards-Version: 4.6.2
+Standards-Version: 4.7.0
 Rules-Requires-Root: no
 Homepage: https://pdfpc.github.io
 Vcs-Git: https://salsa.debian.org/debian/pdf-presenter-console.git
