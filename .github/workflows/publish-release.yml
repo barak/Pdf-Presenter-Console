@@ -1,6 +1,7 @@
 name: Publish release
 
 on:
+    workflow_dispatch:
     push:
         branches:
             - master
@@ -39,16 +40,16 @@ jobs:
         steps:
         - uses: actions/checkout@v3
 
-        - uses: actions/download-artifact@v3
+        - uses: actions/download-artifact@v4
           with:
               name: pdfpc-demo.pdf
 
-        - uses: actions/download-artifact@v3
+        - uses: actions/download-artifact@v4
           with:
               name: pdfpc-video-example.zip
 
         - name: Release
-          uses: softprops/action-gh-release@v1
+          uses: softprops/action-gh-release@v2
           with:
               body: "Release of ${{ env.PDFPC_VERSION }}"
               files: |
@@ -63,9 +64,9 @@ jobs:
         - uses: actions/checkout@v3
 
         - name: Setup TexLive
-          uses: teatimeguest/setup-texlive-action@v2
+          uses: teatimeguest/setup-texlive-action@v3
           with:
-            packages: >-
+            packages: |
                 scheme-basic
                 adjustbox
                 beamer
@@ -88,13 +89,13 @@ jobs:
             cd demo/pdfpc-video-example && make
 
         - name: Save demo slides
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: pdfpc-demo.pdf
             path: demo/pdfpc-demo.pdf
 
         - name: Save video examples
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: pdfpc-video-example.zip
             path: demo/pdfpc-video-example/video-example.zip

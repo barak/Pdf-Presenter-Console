@@ -379,7 +379,7 @@ namespace pdfpc {
 
                     // Assuming we're in the middle of the current slide
                     double expected_progress =
-                        (this.current_user_slide_number + 0.5)/this.user_n_slides;
+                        (this.current_user_slide_number + 0.5)/(this.metadata.get_end_user_slide() + 1);
 
                     int expected_time = (int) (duration*expected_progress);
 
@@ -1249,10 +1249,8 @@ namespace pdfpc {
             add_action("cycleTimerMode", this.cycle_timer,
                 "Cycle the timer view");
 
-            add_action_with_parameter("windowed", GLib.VariantType.STRING,
-                this.toggle_windowed,
-                "Toggle the windowed state (presenter, presentation)",
-                "screen");
+            add_action("windowed", this.toggle_windowed,
+                "Toggle the windowed state");
 
             add_action("blank", this.fade_to_black,
                 "Blank the presentation screen");
@@ -1314,10 +1312,10 @@ namespace pdfpc {
             add_action_with_parameter("movePointer", GLib.VariantType.STRING,
                 this.move_pointer,
                 "Move pointer by vector", "(x,y)");
-#if REST
+
             add_action("showQRcode", this.show_qrcode,
                 "Show QR code");
-#endif
+
             add_action("showHelp", this.show_help,
                 "Show a help screen");
 
@@ -1867,11 +1865,10 @@ namespace pdfpc {
             this.controllables_update();
         }
 
-        protected void toggle_windowed(Variant? type) {
-            var typestr = type.get_string();
-            if (typestr == "presenter" && this.presenter != null) {
+        protected void toggle_windowed() {
+            if (this.presenter != null) {
                 this.presenter.toggle_windowed();
-            } else if (typestr == "presentation" && this.presentation != null) {
+            } else if (this.presentation != null) {
                 this.presentation.toggle_windowed();
             }
         }
@@ -2176,6 +2173,10 @@ namespace pdfpc {
             if (this.presenter != null && this.rest_server != null) {
                 this.presenter.show_qrcode_window(false);
             }
+        }
+#else
+        public void show_qrcode() {
+            GLib.printerr("No REST support, QR disabled.\n");
         }
 #endif
         protected void exit_state() {

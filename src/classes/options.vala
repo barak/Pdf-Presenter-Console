@@ -232,7 +232,7 @@ namespace pdfpc {
         /**
          * Whether the presentation window is always interactive
          */
-        public static bool presentation_interactive = true;
+        public static bool presentation_interactive = false;
 
         /**
          * Screen to be used for the presentation (output name)
@@ -351,9 +351,8 @@ namespace pdfpc {
 
             public void setActionArg(string? actionArg) throws ConfigFileError {
                 if (this.actionName != "setPenColor" &&
-                    this.actionName != "switchMode"  &&
-                    this.actionName != "windowed") {
-                    throw new ConfigFileError.INVALID_BIND("No argument is expected");
+                    this.actionName != "switchMode") {
+                    throw new ConfigFileError.INVALID_BIND("Only 'setPenColor' accepts an action argument");
                 }
 
                 this._actionArg = actionArg;
